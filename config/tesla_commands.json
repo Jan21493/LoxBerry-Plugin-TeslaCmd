@@ -1,0 +1,679 @@
+{
+    "STATUS": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "",
+        "URI": "status",
+        "AUTH": false,
+        "BLECMD": "",
+        "DESC": "Status of the Tesla API."
+    },
+    "PRODUCT_LIST": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "",
+        "URI": "api/1/products",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Returns all products including vehicles, powerwalls, and energy sites."
+    },
+    "VEHICLES": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "",
+        "URI": "api/1/vehicles",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Returns a list of all vehicle registered for the authenticated user."
+    },
+    "VEHICLE_SUMMARY": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Summary information of the vehicle."
+    },
+    "VEHICLE_DATA": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "All information and states of the vehicle."
+    },
+    "LIST_KEYS": {
+        "API": [1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "list-keys",
+        "DESC": "List public keys enrolled on vehicle."
+    },
+    "CHARGE_STATE": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=charge_state",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Charge state information including battery limit, charge miles, charge voltage, charge phases, current, charge management, and battery heater status."
+    },
+    "CLIMATE_STATE": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=climate_state",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Climate settings including seats, vents battery, steering wheel, and preconditioning state."
+    },
+    "CLOSURES_STATE": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=closures_state",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Closure state informations - may be empty"
+    },
+    "DRIVE_STATE": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=drive_state",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Drive state including latitude, longitude, and heading of the vehicle."
+    },
+    "GUI_SETTINGS": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=gui_settings",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "GUI settings of the car, such as unit format and range display"
+    },
+    "LOCATION_DATA": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=location_data",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Location information including position, heading, and speed."
+    },
+    "VEHICLE_CONFIG": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=vehicle_config",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Vehicle configuration information including model, color, badging and wheels"
+    },
+    "VEHICLE_STATE": {
+        "API": [0, 1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/vehicle_data?endpoints=vehicle_state",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Vehicle state, such as which doors are open, tpms pressure"
+    },
+    "BODY_CONTROLLER_STATE": {
+        "API": [1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "body-controller-state",
+        "DESC": "Fetch limited vehicle state information. Works over BLE when infotainment / vehicle is asleep."
+    },
+    "WAKE_UP": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/wake_up",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Wakes up the vehicle from a sleeping state."
+    },
+    "BLE_WAKE_UP": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "wake",
+        "DESC": "Wakes up the vehicle from a sleeping state via Bluetooth Low Energy (BLE)."
+    },
+    "PING": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "ping",
+        "DESC": "Ping the vehicle."
+    },
+    "REMOTE_START_DRIVE": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/remote_start_drive",
+        "AUTH": true,
+        "BLECMD": "drive",
+        "DESC": "Enables keyless driving. There is a two minute window after issuing the command to start driving the car."
+    },
+    "DOOR_UNLOCK": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/door_unlock",
+        "AUTH": true,
+        "BLECMD": "unlock",
+        "DESC": "Unlocks the doors to the vehicle."
+    },
+    "DOOR_LOCK": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/door_lock",
+        "AUTH": true,
+        "BLECMD": "lock",
+        "DESC": "Locks the doors to the vehicle."
+    },
+    "AUTOSECURE_MODELX": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "autosecure-modelx",
+        "DESC": "Close falcon-wing doors and lock vehicle. Model X only."
+    },
+    "SUN_ROOF_CONTROL": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/sun_roof_control",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Controls the panoramic sunroof on the Model S.",
+        "PARAM": {
+            "state": "The amount to open the sunroof. Currently this only allows the values 'vent' and 'close'."
+        }
+    },
+    "WINDOW_CONTROL": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/window_control",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Controls the windows. Will vent or close all windows simultaneously.",
+        "PARAM": {
+            "command": "What action to take with the windows. Allows the values vent and close. lat and lon values must be near the current location of the car for operation to succeed.",
+            "lat": "Your current latitude. See Notes above.",
+            "lon": "Your current longitude. See Notes above."
+        }
+    },
+    "WINDOWS_CLOSE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "windows-close",
+        "DESC": "Closes all windows simultaneously."
+    },
+    "WINDOWS_VENT": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "windows-vent",
+        "DESC": "Vent all windows simultaneously."
+    },
+    "ACTUATE_TRUNK": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/actuate_trunk",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Opens or close either the front or rear trunk.",
+        "PARAM": {
+            "which_trunk": "Which trunk to open/close. 'rear' and 'front' are the only options."
+        }
+    },
+    "TRUNK_CLOSE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "trunk-close",
+        "DESC": "Closes vehicle trunk. Only available on certain vehicle types."
+    },
+    "TRUNK_OPEN": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "trunk-open",
+        "DESC": "Open vehicle trunk. Note that trunk-close only works on certain vehicle types."
+    },
+    "TRUNK_MOVE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "trunk-move",
+        "DESC": "Toggle trunk open/closed. Closing is only available on certain vehicle types."
+    },
+    "FRUNK_OPEN": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "frunk-open",
+        "DESC": "Open vehicle frunk. Note that there's no frunk-close command!"
+    },
+    "HONK_HORN": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/honk_horn",
+        "AUTH": true,
+        "BLECMD": "honk",
+        "DESC": "Honks the horn of the vehicle once."
+    },
+    "FLASH_LIGHTS": {
+        "API": [0, 1],
+        "WORKING": false,
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/flash_lights",
+        "AUTH": true,
+        "BLECMD": "flash-lights",
+        "DESC": "Flashes the head- and backlights once."
+    },
+    "AUTO_CONDITIONING_START": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/auto_conditioning_start",
+        "AUTH": true,
+        "BLECMD": "climate-on",
+        "DESC": "Start the climate control (HVAC) system. Will cool or heat automatically, depending on set temperature."
+    },
+    "AUTO_CONDITIONING_STOP": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/auto_conditioning_stop",
+        "AUTH": true,
+        "BLECMD": "climate-off",
+        "DESC": "Stop the climate control (HVAC) system."
+    },
+    "AUTO_SEAT_AND_CLIMATE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "auto-seat-and-climate {positions} {state}",
+        "DESC": "Turn on automatic seat heating and climate control (HVAC).",
+        "PARAM": {
+            "positions": "The desired seat: 'L' (left), 'R' (right), or 'LR'.",
+            "state": "The desired state: 'on' or 'off'"
+        }
+    },
+    "SET_TEMPS": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/set_temps",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Sets the target temperature for the climate control (HVAC) system. (e.g. value 20)",
+        "PARAM": {
+            "driver_temp": "The desired temperature on the driver's side in celsius.",
+            "passenger_temp": "The desired temperature on the passenger's side in celsius."
+        }
+    },
+    "CLIMATE_SET_TEMP": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "climate-set-temp {temp}",
+        "DESC": "Desired temperature for climate control (HVAC) system.",
+        "PARAM": {
+            "temp": "The desired temperature in celsius or fahrenheit (e.g., 70f or 21c; defaults to Celsius)."
+        }
+    },
+    "SET_PRECONDITIONING_MAX": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/set_preconditioning_max",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Toggles the climate controls between Max Defrost and the previous setting.",
+        "PARAM": {
+            "on": "Set 'true' to turn on Max Defrost, 'false' to turn it off."
+        }
+    },
+    "REMOTE_SEAT_HEATER_REQUEST": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/remote_seat_heater_request",
+        "AUTH": true,
+        "BLECMD": "seat-heater {heater} {level}",
+        "DESC": "Sets the specified seat's heater level.",
+        "PARAM": {
+            "heater": "The desired seat to heat. APIv1 (Front: left=0, right=1; Rear: left=2, center=4, right=5), BLE (front-left, front-right, 2nd-row-left, 2nd-row-center, 2nd-row-right, 3rd-row-left, 3rd-row-right)",
+            "level": "The desired level for the heater. APIv1 (0-3), BLE (off, low, medium, high)"
+        }
+    },
+    "REMOTE_STEERING_WHEEL_HEATER_REQUEST": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heater_request",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Turn steering wheel heater on or off.",
+        "PARAM": {
+            "on": "'true' to turn on, 'false' to turn off."
+        }
+    },
+    "STEERING_WHEEL_HEATER": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "steering-wheel-heater {on}",
+        "DESC": "Turn steering wheel heater on or off.",
+        "PARAM": {
+            "state": "'on' or 'off'."
+        }
+    },
+    "CHARGE_PORT_DOOR_OPEN": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/charge_port_door_open",
+        "AUTH": true,
+        "BLECMD": "charge-port-open",
+        "DESC": "Opens the charge port or unlocks the cable."
+    },
+    "CHARGE_PORT_DOOR_CLOSE": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/charge_port_door_close",
+        "AUTH": true,
+        "BLECMD": "charge-port-close",
+        "DESC": "Closes the charge port."
+    },
+    "CHARGE_START": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/charge_start",
+        "AUTH": true,
+        "BLECMD": "charging-start",
+        "DESC": "If the car is plugged in but not currently charging, this will start it charging."
+    },
+    "CHARGE_STOP": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/charge_stop",
+        "AUTH": true,
+        "BLECMD": "charging-stop",
+        "DESC": "If the car is currently charging, this will stop it."
+    },
+    "CHARGE_STANDARD": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/charge_standard",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Set vehicle to standard charge limit or ~90%."
+    },
+    "CHARGE_MAX_RANGE": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/charge_max_range",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Set the vehicle to max charge limit."
+    },
+    "SET_CHARGE_LIMIT": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/set_charge_limit",
+        "AUTH": true,
+        "BLECMD": "charging-set-limit {percent}",
+        "DESC": "Set the vehicle to defined charge limit. (e.g. value 80)",
+        "PARAM": {
+            "percent": "The percentage the battery will charge until."
+        }
+    },
+    "SET_CHARGING_AMPS": {
+        "API": [0, 1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/set_charging_amps",
+        "AUTH": true,
+        "BLECMD": "charging-set-amps {charging_amps}",
+        "DESC": "Sets the charge amps limit to a custom value. (e.g. value 16)",
+        "PARAM": {
+            "charging_amps": "The max amps to use during charging."
+        }
+    },
+    "SET_SCHEDULED_DEPARTURE": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/set_scheduled_departure",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Set the scheduled departure.",
+        "PARAM": {
+            "enable": "'true' for on, 'false' for off.",
+            "departure_time": "time in minutes since midnight local time.",
+            "preconditioning_enabled": "'true' for on, 'false' for off.",
+            "preconditioning_weekdays_only": "'true' for on, 'false' for off.",
+            "off_peak_charging_enabled": "'true' for on, 'false' for off.",
+            "off_peak_charging_weekdays_only": "'true' for on, 'false' for off.",
+            "end_off_peak_time": "time in minutes since midnight local time."
+        }
+    },
+    "SET_SCHEDULED_CHARGING": {
+        "API": [0],
+       "TYPE": "POST",
+       "TAG": "{vehicle_tag}",
+       "URI": "api/1/vehicles/{vehicle_tag}/command/set_scheduled_charging",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Sets a time at which charging should be completed.",
+        "PARAM": {
+            "enable": "'true' for on, 'false' for off.",
+            "time": "Time in minutes since midnight local time."
+        }
+    },
+    "CHARGING_SCHEDULE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "charging-schedule {time}",
+        "DESC": "Schedule charging to MINS minutes after midnight and enable daily scheduling.",
+        "PARAM": {
+            "time": "time in minutes since midnight local time."
+        }    
+    },
+    "CHARGING_SCHEDULE_CANCEL": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "charging-schedule-cancel",
+        "DESC": "Cancel scheduled charge start."
+    },
+    "SET_VALET_MODE": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/set_valet_mode",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Activates or deactivates Valet Mode.",
+        "PARAM": {
+            "on": "True to turn on, false to turn off.",
+            "password": "A PIN to deactivate Valet Mode (e.g. 1234). "
+        }
+    },
+    "RESET_VALET_PIN": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/reset_valet_pin",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Clears the currently set PIN for Valet Mode when deactivated. A new PIN will be required when activating from the car screen."
+    },
+    "SET_SENTRY_MODE": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "api/1/vehicles/{vehicle_tag}/command/set_sentry_mode",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Turns sentry mode on or off.",
+        "PARAM": {
+            "on": "'true' to turn on, 'false' to turn off."
+        }
+    },
+    "SENTRY_MODE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "sentry-mode {state}",
+        "DESC": "Turns sentry mode on or off.",
+        "PARAM": {
+            "state": "'on' or 'off'."
+        }
+    },
+    "MEDIA_SET_VOLUME": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "media-set-volume {volume}",
+        "DESC": "Set volume.",
+        "PARAM": {
+            "volume": "Set volume (0.0-10.0)."
+        }
+    },
+    "MEDIA_TOGGLE_PLAYBACK": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "media-toggle-playback",
+        "DESC": "Toggle between play/pause."
+    },
+    "SOFTWARE_UPDATE_START": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "software-update-start {delay}",
+        "DESC": "Start software update after DELAY.",
+        "PARAM": {
+            "delay": "Time to wait before starting update. Examples: 2h, 10m."
+        }
+    },
+    "SOFTWARE_UPDATE_CANCEL": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "software-update-cancel",
+        "DESC": "Cancel a pending software update."
+    },
+    "LIVE_STATUS": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/live_status",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Retrieves current system information (e.g. solar production, grid export/import, home consumption, etc.)."
+    },
+    "SITE_INFO": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/site_info",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Retrieves general system information."
+    },
+    "SITE_STATUS": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/site_status",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Retrieves general system information."
+    },
+    "SITE_PROGRAMS": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/programs",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Retrieves energy site program information."
+    },
+    "SITE_TARIFF_RATE": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/tariff_rate",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Retrieves the user defined Utility Rate Plan used for Time-Based Control mode. It looks like this endpoint is updated every 30 minutes."
+    }
+}

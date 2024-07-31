@@ -7,15 +7,17 @@ define ("COMMANDFILE", "$lbpconfigdir/tesla_commands.json");
 define ("MQTTTOPIC", "${lbpplugindir}");
 
 // Template
-$template_title = "TeslaConnect " . LBSystem::pluginversion();
+$template_title = "Tesla Command " . LBSystem::pluginversion();
 $helplink = "https://wiki.loxberry.de/plugins/teslacmd/start";
 
 // Command URI
-$lbzeurl ="http://&lt;user&gt;:&lt;pass&gt;@".LBSystem::get_localip()."/admin/plugins/".LBPPLUGINDIR."/teslacmd.php";
+$lbzeurl ="http://&lt;user&gt;:&lt;pass&gt;@".LBSystem::get_localip()."/admin/plugins/".LBPPLUGINDIR."/send.php";
 
 const OWNERS_API = 0;
 const BLE_PLUS_OWNERS_API = 1;
-$default_baseblecmd = "tesla-control -ble -vin {vehicle_tag} -key-name {vehicle_tag} {command}";
+//$default_baseblecmd = $lbpbindir."/tesla-control -ble -vin {vehicle_tag} -key-name {vehicle_tag} {command}";
+//$default_baseblecmd = "tesla-control -ble -vin {vehicle_tag} -key-name {vehicle_tag} {command}";
+$default_baseblecmd = "tesla-control -ble -vin {vehicle_tag} -key-file ".$lbpdatadir."/{vehicle_tag}-private.pem {command}";
 
 $apinames = array();
 $apinames[OWNERS_API] = "(inofficial) Owner's API";

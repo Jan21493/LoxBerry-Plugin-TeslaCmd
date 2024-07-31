@@ -21,7 +21,7 @@ function shutdown()
 	}
 }
 
-$log = LBLog::newLog( [ "name" => "TeslaConnect", "stderr" => 1 ] );
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1 ] );
 LOGSTART("Start Logging");
 
 // Tesla API

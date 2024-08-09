@@ -45,7 +45,9 @@ PBIN=$LBPBIN/$PDIR
 
 echo "<INFO> Copy back existing config files"
 cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/sessiondata.json $LBHOMEDIR/config/plugins/$PDIR/ 
+cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/apidata.json $LBHOMEDIR/config/plugins/$PDIR/ 
 chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/sessiondata.json
+chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/apidata.json
 
 echo "<INFO> Updating crontab"
 sudo $LBHOMEDIR/sbin/installcrontab.sh $PSHNAME $(pwd)/cron/crontab

@@ -107,19 +107,19 @@ sudo reboot
 
 13. Create a new private and public key pair. You should use the VIN of your car as the name of the key.
 
-cd /opt/loxberry/data/plugins/teslacmd/
+cd /opt/loxberry/config/plugins/teslacmd/
 tesla-keygen -key-file LRW31234567890123-private.pem create > LRW31234567890123-public.pem
 
 14. Install the public key in your car - requires nfc key card to tap on center console. You may use a different device as your Loxberry, but you may have to be in or very close to the car
 
-cd /opt/loxberry/data/plugins/teslacmd/
+cd /opt/loxberry/config/plugins/teslacmd/
 tesla-control -vin LRW31234567890123 -ble add-key-request ./LRW31234567890123-public.pem owner cloud_key
 
 Once the public key is installed in your car you may delete this key.
 
 15. Verify if you are able to retrieve the status from the car and send commands to it
 
-tesla-control -ble -vin LRW31234567890123 -key-file /opt/loxberry/data/plugins/teslacmd/LRW31234567890123-private.pem body-controller-state
+tesla-control -ble -vin LRW31234567890123 -key-file /opt/loxberry/config/plugins/teslacmd/LRW31234567890123-private.pem body-controller-state
 - output is different depending on the sleep state of the car
 
 # sample output - vehicle is asleep:

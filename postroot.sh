@@ -64,6 +64,8 @@ echo "<INFO> Copy pre-build binary tools from Tesla Vehicle Command SDK if Linux
 if [[ "$(uname -m)" == 'aarch64' ]]; then
    cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control /usr/local/bin
    cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen /usr/local/bin
+   # add rights for BLE access to binary file
+   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
 fi
 
 # Exit with Status 0

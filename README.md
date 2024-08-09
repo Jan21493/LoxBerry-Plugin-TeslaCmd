@@ -129,6 +129,14 @@ tesla-control -ble -vin LRW31234567890123 -key-file /opt/loxberry/data/plugins/t
 	"userPresence": "VEHICLE_USER_PRESENCE_NOT_PRESENT"
 }
 
+# when the command is executed via URL to the Loxberry, the statuses are translated to numbers to make it easier for the Loxone Miniserver to process the values. See enums ClosureState_E, VehicleLockState_E, and VehicleSleepStatus_E
+# in vehicle-command/pkg/protocol/protobuf/vcsec.proto - https://github.com/teslamotors/vehicle-command/blob/05bc5dd8d0649b4ccb45a765b9127d06f1050a6f/pkg/protocol/protobuf/vcsec.proto
+{
+	"vehicleLockState": 1,
+	"vehicleSleepStatus": 2,
+	"userPresence": 1
+}
+
 # sample output - vehicle is awake:
 {
 	"closureStatuses": {

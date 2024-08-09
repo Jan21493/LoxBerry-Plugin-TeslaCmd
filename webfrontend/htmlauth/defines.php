@@ -17,7 +17,7 @@ const OWNERS_API = 0;
 const BLE_PLUS_OWNERS_API = 1;
 //$default_baseblecmd = $lbpbindir."/tesla-control -ble -vin {vehicle_tag} -key-name {vehicle_tag} {command}";
 //$default_baseblecmd = "tesla-control -ble -vin {vehicle_tag} -key-name {vehicle_tag} {command}";
-$default_baseblecmd = "tesla-control -ble -vin {vehicle_tag} -key-file ".$lbpdatadir."/{vehicle_tag}-private.pem {command}";
+$default_baseblecmd = "tesla-control -ble -vin {vehicle_tag} -key-file ".$lbpconfigdir."/{vehicle_tag}-private.pem {command}";
 
 $apinames = array();
 $apinames[OWNERS_API] = "(inofficial) Owner's API";

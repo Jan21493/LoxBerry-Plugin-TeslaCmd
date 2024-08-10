@@ -62,8 +62,13 @@ PBIN=$LBPBIN/$PDIR
  
 echo "<INFO> Copy pre-build binary tools from Tesla Vehicle Command SDK if Linux Version is 64-bit and ARMv8 architecture"
 if [[ "$(uname -m)" == 'aarch64' ]]; then
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control /usr/local/bin
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen /usr/local/bin
+   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.aarch64 /usr/local/bin/tesla-control
+   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.aarch64 /usr/local/bin/tesla-control
+   # add rights for BLE access to binary file
+   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
+elif [[ "$(uname -m)" == 'armv7l' ]]; then
+   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.armv7l /usr/local/bin/tesla-control
+   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.armv7l /usr/local/bin/tesla-control
    # add rights for BLE access to binary file
    setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
 fi

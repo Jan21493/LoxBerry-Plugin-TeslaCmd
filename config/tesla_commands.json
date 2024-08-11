@@ -132,7 +132,7 @@
         "URI": "",
         "AUTH": true,
         "BLECMD": "body-controller-state",
-        "DESC": "Fetch limited vehicle state information. Works over BLE when infotainment / vehicle is asleep."
+        "DESC": "Fetch limited vehicle state information. Works over BLE even when infotainment / vehicle is asleep. "
     },
     "WAKE_UP": {
         "API": [0, 1],
@@ -143,7 +143,7 @@
         "BLECMD": "",
         "DESC": "Wakes up the vehicle from a sleeping state."
     },
-    "BLE_WAKE_UP": {
+    "BLE_WAKE": {
         "API": [1],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
@@ -377,16 +377,29 @@
         }
     },
     "REMOTE_SEAT_HEATER_REQUEST": {
-        "API": [0, 1],
+        "API": [0],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/remote_seat_heater_request",
         "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Sets the specified seat's heater level.",
+        "PARAM": {
+            "heater": "The desired seat to heat. Front: left=0, right=1; Rear: left=2, center=4, right=5",
+            "level": "The desired level for the heater. Values: 0-3"
+        }
+    },
+    "SEAT_HEATER": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
         "BLECMD": "seat-heater {heater} {level}",
         "DESC": "Sets the specified seat's heater level.",
         "PARAM": {
-            "heater": "The desired seat to heat. APIv1 (Front: left=0, right=1; Rear: left=2, center=4, right=5), BLE (front-left, front-right, 2nd-row-left, 2nd-row-center, 2nd-row-right, 3rd-row-left, 3rd-row-right)",
-            "level": "The desired level for the heater. APIv1 (0-3), BLE (off, low, medium, high)"
+            "heater": "The desired seat to heat. Values: front-left, front-right, 2nd-row-left, 2nd-row-center, 2nd-row-right, 3rd-row-left, 3rd-row-right",
+            "level": "The desired level for the heater. Values: off, low, medium, high"
         }
     },
     "REMOTE_STEERING_WHEEL_HEATER_REQUEST": {

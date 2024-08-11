@@ -63,8 +63,8 @@ if($tokenvalid == "false") {
 <div style="display:flex; align-items: center; justify-content: center;">
     <div style="flex: 0 0 95%;padding:5px" data-role="fieldcontain">
         <label for="summarylink">
-            <strong><?=strtolower($command)?></strong><br>
-            <span class="hint"><?= "$attribute->DESC" ?></span></label>
+            <strong><?=strtolower($command)?></strong>
+        </label>
         <input
             type="text"
             id="summarylink"
@@ -72,6 +72,7 @@ if($tokenvalid == "false") {
             data-mini="true"
             value="<?=$lbzeurl."?action=".strtolower($command); ?>"
             readonly="readonly">
+        <p style="margin:4px 0px;"><span class="hint"><?= "$attribute->DESC" ?></span></p>
     </div>
 </div>
 
@@ -91,6 +92,7 @@ if($tokenvalid == "false") {
             $vehicle_tag = "&vid=$vid";
             $info = $vehicle->site_name. " (VID: " . $vid . ")";
             $tag = "{energy_site_id}";
+            $api = OWNERS_API;
         } else {
             $vid = strval($vehicle->id);
             $vin = strval($vehicle->vin);
@@ -98,20 +100,18 @@ if($tokenvalid == "false") {
             $vehicle_tag = "&vid=$vid";                
             $info = $vehicle->display_name. " (VID: " . $vid . ", VIN: ".$vin . ")";
             $tag = "{vehicle_tag}";
+            $api = $vehicle->api;
         }
 ?>
 
 <h2>Queries for <?=$info."\n"; ?></h2>
 
+<p>This vehicle is using the <span class="mono"><i><?=$apinames[$api]?></i></span> to retrieve and send information.
 <?php
-        if (isset($vehicle->vin)) {
+        if ($api == BLE_PLUS_OWNERS_API)
+            echo ' All commands that are send locally via BLE are tagged with the bluetooth symbol. <img src="./images/Bluetooth.svg" alt="BLE" height="15" ></img>';
 ?>
-<p><i>This vehicle is using the <?=$apinames[OWNERS_API]?> to retrieve informations and 
-    the <span class="mono"><?=$apinames[$vehicle->api]?></span> to send commands to the vehicle.</i></p>
-<p><b>NOTE: The list of available commands <u>and parameters</u> is different for each API! See 'Test queries' for more information about each parameter.</b></p>
-<?php
-        }
-?>
+</p><p><b>NOTE: The list of available commands <u>and parameters</u> is different for each API! See below for more information about each parameter.</b></p>
 
 <h3>Get informations</h3>
 
@@ -133,10 +133,15 @@ if($tokenvalid == "false") {
 ?>
 
 <div style="display:flex; align-items: center; justify-content: center;">
-    <div style="flex: 0 0 95%;padding:5px" data-role="fieldcontain">
+    <div style="flex: 0 0 95%; padding:5px;" data-role="fieldcontain">
         <label for="summarylink">
-            <strong><?=strtolower($command)?></strong><br>
-            <span class="hint"><?= "$attribute->DESC" ?></span></label>
+            <strong><?=strtolower($command)?></strong>
+<?php
+            if (!empty($attribute->BLECMD)) {   
+                echo '<img src="./images/Bluetooth.svg" alt="BLE" height="15" ></img>';
+            }
+?>
+        </label>
         <input
             type="text"
             id="summarylink"
@@ -144,6 +149,7 @@ if($tokenvalid == "false") {
             data-mini="true"
             value="<?=$lbzeurl."?action=".strtolower($command).$vehicle_tag; ?>"
             readonly="readonly">
+        <p style="margin:4px 0px;"><span class="hint"><?= "$attribute->DESC" ?></span></p>
     </div>
 </div>
 
@@ -162,7 +168,7 @@ if($tokenvalid == "false") {
 				    $command_get = "";
 					if (isset($commands->{strtoupper($command)}->PARAM)) {
 						foreach ($commands->{strtoupper($command)}->PARAM as $param => $param_desc) {
-							$command_get = $command_get."&$param=<value>";
+							$command_get .= "&$param=<value>";
 						}
 					}
 ?>
@@ -170,8 +176,13 @@ if($tokenvalid == "false") {
 <div style="display:flex; align-items: center; justify-content: center;">
     <div style="flex: 0 0 95%;padding:5px" data-role="fieldcontain">
         <label for="summarylink">
-            <strong><?=strtolower($command)?></strong><br>
-            <span class="hint"><?= "$attribute->DESC" ?></span></label>
+            <strong><?=strtolower($command)?></strong>
+<?php
+            if (!empty($attribute->BLECMD)) {   
+                echo '<img src="./images/Bluetooth.svg" alt="BLE" height="15" ></img>';
+            }
+?>
+        </label>
         <input
             type="text"
             id="summarylink"
@@ -179,7 +190,17 @@ if($tokenvalid == "false") {
             data-mini="true"
             value="<?=$lbzeurl."?action=".strtolower($command).$vehicle_tag.$command_get; ?>"
             readonly="readonly">
-    </div>
+        <p style="margin:4px 0px;"><span class="hint"><?= "$attribute->DESC" ?></span></p>
+<?php
+            if(isset($attribute->PARAM)) {
+                echo '<table class="formtable" border="0">';
+    			foreach ($attribute->PARAM as $param => $param_desc) {
+                    echo '<tr><td><span class="hint"><i>'.$param.'</i>: </span></td><td><span class="hint">'.$param_desc.'</span></td></tr>';
+                }
+                echo '</table>';
+            }
+?>
+        </div>
 </div>
 
 <?php

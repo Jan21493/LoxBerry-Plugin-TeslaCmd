@@ -257,11 +257,11 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 					$returndata = $data->response;
 					if (isset($returndata->id)){
 						LOGDEB('if(isset($returndata->id))');
-						mqttpublish($returndata, "/$returndata->id");
+						mqttpublish($returndata, "/$returndata->id/".strtolower($action));
 					} else {
 						// [ ] Bugfix empty $VID
 						if (!empty($VID)){
-							mqttpublish($returndata, "/$VID"."/".strtolower($action));
+							mqttpublish($returndata, "/$VID/".strtolower($action));
 						} else {
 							mqttpublish($returndata, "/".strtolower($action));
 						}
@@ -322,19 +322,32 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 	LOGINF("BLE Query: $action: start");
 
 	$type = $commands->{"$action"}->TYPE;
-	//while($timeout > -1) {
-		if($type == "GET") {
-			$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
-			LOGDEB("tesla_ble_query: $type: $blefullcmd");
-			$result_code = tesla_shell_exec( "$blefullcmd", $output);
-			$result_code_msg = get_result_code_msg($result_code);
+	if($type == "GET") {
+		$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
+		LOGDEB("tesla_ble_query: $type: $blefullcmd");
+		$result_code = tesla_shell_exec( "$blefullcmd", $output);
+		if ( $result_code == 0) {
+			$rawdata = '{"result_code":"0", ';
+			$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
+			$rawdata .= '"error_msg":""';
+			if ($action == "BODY_CONTROLLER_STATE")
+				$rawdata .= ', "vehicleNearby":true';
 
-			if (($action == "BODY_CONTROLLER_STATE") && $result_code == 0) {
-				if (!empty($output) && !empty($output[0])) {
-					$rawdata = "";
+			if (!empty($output) && !empty($output[0])) {
+				// reformat list-keys as json
+				if ($action == "LIST_KEYS") {
+					foreach($output as $key => $line) {
+						$keydata = explode("\t", $line);
+						$rawdata .= ', "key'.$key.'": {"key":"'.$keydata[0].'", "role":"'.$keydata[1].'", "key_form_factor":"'.$keydata[2].'"}';
+					}
+				} else {
+					// remove outer brackets
+					array_shift($output);
+					array_pop($output);
 					// replace state strings with numbers to make it easier for the Loxone miniserver to process the values
 					// enums are defined in https://github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec.proto
 					//	 ClosureState_E, VehicleLockState_E, VehicleSleepStatus_E, UserPresence_E 
+					$rawdata .= ', ';
 					foreach($output as $line) {
 						$line = str_replace('"CLOSURESTATE_CLOSED"', "0", $line);
 						$line = str_replace('"CLOSURESTATE_OPEN"', "1", $line);
@@ -353,27 +366,41 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 						$line = str_replace('"VEHICLE_USER_PRESENCE_UNKNOWN"', "0", $line);
 						$line = str_replace('"VEHICLE_USER_PRESENCE_NOT_PRESENT"', "1", $line);
 						$line = str_replace('"VEHICLE_USER_PRESENCE_PRESENT"', "2", $line);
-						$rawdata .= $line."\n";
+						$rawdata .= $line;
 					}
-					mqttpublish($rawdata, "/$vehicle_tag"."/".strtolower($action));
 				}
-			}
+			} 
+			$rawdata .= ' }';
 		} else {
-			//POST
-			$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
-			LOGDEB("tesla_ble_query: $type: $blefullcmd");
-			$result_code = tesla_shell_exec( "$blefullcmd", $output);
-			$result_code_msg = get_result_code_msg($result_code);
-		
-			if (!empty($output) && !empty($output[0])) {
-				$rawdata = "";
-				foreach($output as $line) {
-					$rawdata .= $line."\n";
-				}
-			}
+			$rawdata = '{"result_code":"'.$result_code.'", ';
+			$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
+			$rawdata .= '"error_msg":"'.$output[0].'"';
+			if ($action == "BODY_CONTROLLER_STATE")
+				$rawdata .= ', "vehicleNearby":false';
+			$rawdata .= ' }';
 		}
+		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
+	} else {
+		//POST
+		$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
+		LOGDEB("tesla_ble_query: $type: $blefullcmd");
+		$result_code = tesla_shell_exec( "$blefullcmd", $output);
+		$rawdata = '{"result_code":"'.$result_code.'", ';
+		$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
+		if (!empty($output) && !empty($output[0])) {
+			$rawdata .= '"error_msg":"'.$output[0].'", ';
+		} else {
+			$rawdata .= '"error_msg":"", ';
+		}
+		if ($result_code == 0)
+			$rawdata .= '"vehicleNearby":true ';
+		else
+			$rawdata .= '"vehicleNearby":false ';
+		$rawdata .= ' }';
+		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
+	}
 
-		return "$result_code_msg\n$rawdata\n";
+	return $rawdata;
 }
 
 
@@ -394,22 +421,22 @@ function get_result_code_msg($result_code)
 {
 	switch ($result_code) {
 		case 0:
-			$result_code_msg = "Done.\n";
+			$result_code_msg = "Done.";
 			break;
 		case 1:
-			$result_code_msg = "General error.\n";
+			$result_code_msg = "General error.";
 			break;
 		case 2:
-			$result_code_msg = "Misuse of shell builtins.\n";
+			$result_code_msg = "Misuse of shell builtins.";
 			break;
 		case 126:
-			$result_code_msg = "Command invoked cannot execute.\n";
+			$result_code_msg = "Command invoked cannot execute.";
 			break;
 		case 127:
-			$result_code_msg = "Command not found. Is Tesla control utility installed and included in path?\n";
+			$result_code_msg = "Command not found. Is Tesla control utility installed and included in path?";
 			break;
 		default:	
-			$result_code_msg = "Unknown error. Result code = $result_code\n";
+			$result_code_msg = "Unknown error. Result code = $result_code";
 			break;
 		}
 	return $result_code_msg;
@@ -429,16 +456,18 @@ function pretty_print($json_data)
 	for($counter=0; $counter<strlen($json_data); $counter++)
 	{
 		//Checking ending second and third brackets
-		if ( $json_data[$counter] == '}' || $json_data[$counter] == ']' )
+		if ($json_data[$counter] == '}' || $json_data[$counter] == ']')
 		{
 			$space--;
-			echo "\n";
-			echo str_repeat(' ', ($space*2));
+			if ($json_data[$counter-1] != '{' && $json_data[$counter-1] != '[') {
+				echo "\n";
+				echo str_repeat(' ', ($space*2));
+			}
 		}
 	 
 		//Checking for double quote(“) and comma (,)
-		if ( $json_data[$counter] == '"' && ($json_data[$counter-1] == ',' ||
-			$json_data[$counter-2] == ',') )
+		if ($json_data[$counter] == '"' && 
+		    ($json_data[$counter-1] == ',' || $json_data[$counter-2] == ',' || $json_data[$counter-3] == ','))
 		{
 			echo "\n";
 			echo str_repeat(' ', ($space*2));
@@ -453,7 +482,10 @@ function pretty_print($json_data)
 			//Add formatting for options
 			echo '<span style="color:red;">';
 		}
-		echo $json_data[$counter];
+		if ($json_data[$counter] != "\t")
+			echo $json_data[$counter];
+		if ( $json_data[$counter] == ':' && $json_data[$counter+1] != ' ' )
+			echo " ";
 		//Checking conditions for adding closing span tag
 		if ( $json_data[$counter] == '"' && $flag )
 		echo '</span>';
@@ -463,7 +495,9 @@ function pretty_print($json_data)
 		//Checking starting second and third brackets
 		if ( $json_data[$counter] == '{' || $json_data[$counter] == '[' )
 			{
-			$space++;
+			if ($json_data[$counter+1] != '}' && $json_data[$counter+1] != ']') {
+				$space++;
+			}
 			echo "\n";
 			echo str_repeat(' ', ($space*2));
 		}
@@ -486,7 +520,7 @@ function mqttpublish($data, $mqttsubtopic = "")
 	$mqtt = new Bluerhinos\phpMQTT($creds['brokerhost'], $creds['brokerport'], $client_id);
 
 	if ($mqtt->connect(true, NULL, $creds['brokeruser'], $creds['brokerpass'])) {
-		LOGDEB("mqttpublish: MQTT connection successful");
+		LOGDEB("mqttpublish: MQTT connection successful, topic: ".MQTTTOPIC);
 		LOGOK("MQTT: Connection successful.");
 
 		if (is_object($data) or is_array($data)) {
@@ -499,11 +533,11 @@ function mqttpublish($data, $mqttsubtopic = "")
 									if ($sskey == "timestamp") {
 										$ssvalue = epoch2lox(substr($ssvalue, 0, 10));
 									} //epochetime maxlength
-									if ($ssvalue == false) {
+									if ($ssvalue === false) {
 										$ssvalue = 0;
 									}
 									$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey", $ssvalue, 0, 1);
-									LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
+									LOGDEB("mqttpublish: 3 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
 								}
 							}
 						} else {
@@ -513,7 +547,7 @@ function mqttpublish($data, $mqttsubtopic = "")
 										if (is_object($ssvalue)) {
 											foreach ($ssvalue as $ssskey => $sssvalue) {
 												$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey", $sssvalue, 0, 1);
-												LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey: $sssvalue");
+												LOGDEB("mqttpublish: 4 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey: $sssvalue");
 											}
 										} else {
 
@@ -521,11 +555,11 @@ function mqttpublish($data, $mqttsubtopic = "")
 												if ($sskey == "timestamp") {
 													$ssvalue = epoch2lox(substr($ssvalue, 0, 10));
 												} //epochetime maxlength
-												if ($ssvalue == false) {
+												if ($ssvalue === false) {
 													$ssvalue = 0;
 												}
 												$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey", $ssvalue, 0, 1);
-												LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
+												LOGDEB("mqttpublish: 5 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
 											}
 										}
 									}
@@ -536,11 +570,11 @@ function mqttpublish($data, $mqttsubtopic = "")
 										if ($skey == "timestamp") {
 											$svalue = epoch2lox(substr($svalue, 0, 10));
 										} //epochetime maxlength
-										if ($svalue == false) {
+										if ($svalue === false) {
 											$svalue = 0;
 										}
 										$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey", $svalue, 0, 1);
-										LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
+										LOGDEB("mqttpublish: 6 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
 									}
 								}
 							} else {
@@ -548,11 +582,11 @@ function mqttpublish($data, $mqttsubtopic = "")
 									if ($skey == "timestamp") {
 										$svalue = epoch2lox(substr($svalue, 0, 10));
 									} //epochetime maxlength
-									if ($svalue == false) {
+									if ($svalue === false) {
 										$svalue = 0;
 									}
 									$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey", $svalue, 0, 1);
-									LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
+									LOGDEB("mqttpublish: 7 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
 								}
 							}
 						}
@@ -562,24 +596,27 @@ function mqttpublish($data, $mqttsubtopic = "")
 						if (is_array($value)) {
 							$value = implode(",", $value);
 						}
+						if ($value === false) {
+							$value = 0;
+						}
 						$countsubtopics = explode("/", $mqttsubtopic);
 						if ($countsubtopics < 3) {
 							$mqtt->publish(MQTTTOPIC . "/summary$mqttsubtopic/$key", $value, 0, 1);
-							LOGDEB("mqttpublish: " . MQTTTOPIC . "/summary$mqttsubtopic/$key: $value");
+							LOGDEB("mqttpublish: 8 " . MQTTTOPIC . "/summary$mqttsubtopic/$key: $value");
 						} else {
 							$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key", $value, 0, 1);
-							LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic/$key: $value");
+							LOGDEB("mqttpublish: 9 " . MQTTTOPIC . "$mqttsubtopic/$key: $value");
 						}
 					}
 				}
 			}
 		} else {
 			$mqtt->publish(MQTTTOPIC . "$mqttsubtopic", $data, 0, 1);
-			LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic: $data");
+			LOGDEB("mqttpublish: 10 " . MQTTTOPIC . "$mqttsubtopic: $data");
 		}
 		//[x] Query timestamp added, changed to mqtt_timestamp
 		$mqtt->publish(MQTTTOPIC . "/mqtt_timestamp", epoch2lox(time()), 0, 1);
-		LOGDEB("mqttpublish: " . MQTTTOPIC . "/mqtt_timestamp: " . epoch2lox(time()));
+		LOGDEB("mqttpublish: 11 " . MQTTTOPIC . "/mqtt_timestamp: " . epoch2lox(time()));
 		$mqtt->close();
 	} else {
 		LOGDEB("mqttpublish: MQTT connection failed");
@@ -648,6 +685,7 @@ function tesla_shell_exec( $command, &$output)
 	// Function to execute shell command
 	//[ ] If Timeout, restart apache server: sudo systemctl restart apache2
 	
+	$command .= " 2>&1";
 	if( !empty($command) ) {
 		LOGDEB("tesla_shell_exec: $command");
 	} else {

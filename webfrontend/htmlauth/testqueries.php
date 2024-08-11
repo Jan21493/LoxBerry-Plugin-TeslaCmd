@@ -304,7 +304,7 @@ if($tokenvalid == "false") {
 						LOGOK("teslaqueries: vid: $vid, action: $action ".$command_post_print.($force ? ", force: $force" : ""));
 					} else {
 						$commandoutput = tesla_ble_query( $vid, $action, $blebasecmd, $blecmd, $force );
-						LOGOK("teslaqueries: vid: $vid, action: $action, cmd: $blebasecmd $blecmd".($force ? ", force: $force" : ""));
+						LOGOK("teslaqueries: vid: $vid, action: $action, basecmd: $blebasecmd, command: $blecmd".($force ? ", force: $force" : ""));
 					}
 				}
 
@@ -350,10 +350,14 @@ if($tokenvalid == "false") {
 					}
 				}
 ?>
-<h4>Response:</h3>
+<h4>Response:</h4>
 <div class="mono">
+	<p>###<?php var_dump(json_decode($commandoutput));?>###</p>
 	<p><?php echo pretty_print($commandoutput);?></p>
 </div>
+<b>Note:</b> Some status information that is retrieved as a string (name for a constant) is translated to a number to make it easier for the Loxone Miniserver to process the response. See enums ClosureState_E, VehicleLockState_E, and VehicleSleepStatus_E
+in <a href="https://github.com/teslamotors/vehicle-command/blob/05bc5dd8d0649b4ccb45a765b9127d06f1050a6f/pkg/protocol/protobuf/vcsec.proto" target=”_blank”>vehicle-command/pkg/protocol/protobuf/vcsec.proto</a> for the meaning of these numbers.
+
 <hr>
 	
 <?php

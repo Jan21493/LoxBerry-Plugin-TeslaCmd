@@ -33,3 +33,5 @@ $navbar[3]['URL'] = 'testqueries.php';
 $navbar[99]['Name'] = "Logfiles";
 $navbar[99]['URL'] = '/admin/system/logmanager.cgi?package='.LBPPLUGINDIR;
 $navbar[99]['target'] = '_blank';
+
+?>

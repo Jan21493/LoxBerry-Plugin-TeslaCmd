@@ -352,6 +352,8 @@ if($tokenvalid == "false") {
 ?>
 <h4>Response:</h4>
 <div class="mono">
+	<!--<p>###<?php var_dump(json_decode($commandoutput));?>###</p>-->
+	<p>###<?php var_dump(json_decode($commandoutput));?>###</p>
 	<p><?php echo pretty_print($commandoutput);?></p>
 </div>
 <b>Note:</b> Some status information that is retrieved as a string (name for a constant) is translated to a number to make it easier for the Loxone Miniserver to process the response. See enums ClosureState_E, VehicleLockState_E, and VehicleSleepStatus_E

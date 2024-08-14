@@ -18,11 +18,11 @@ All data from the vehicle is transferred back to the Loxone Miniserver via MQTT.
 > To use the Tesla Control Utility via BLE you may have to install the tool, set up local keys and authorize the new key by tapping your Tesla NFC card on the center console in your car. 
 See [README.md](https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility) for details.
 
-The plugin contains binary files for the two utilities 'tesla-control' and 'tesla-keygen' for Raspberry PI 64-bit version only. For all other platforms you have to follow the instructions provided by Telsa to install 'go' and compile and build the two utilities. You may choose to compile and build the two utilities on a Raspberry PI 64-bit if you have security concerns.
+The plugin contains binary files for the two utilities 'tesla-control' and 'tesla-keygen' for Raspberry PI 32- and 64-bit only. For all other platforms you have to follow the instructions provided by Telsa to install 'go' and compile and build the two utilities. You may choose to compile and build the two utilities on a Raspberry PI if you have security concerns or if Tesla has provided a new version of the SDK.
 
-Currently this plugin is in development, so it should not be used in any productive environment. It allows you to select the API for each of your cars and a list of query commands for both API's as well as entering test quieries that show the URL for commands that use the Owner's API or the full tesla-control command for commands that use the Vehicle Command API via BLE.
+Currently this plugin is in development, so it should be used in any productive environment with care. It allows you to select the API for each of your cars and a list of query commands for both API's as well as entering test quieries that show the URL for commands that use the Owner's API or the full tesla-control command for commands that use the Vehicle Command API via BLE.
 
-See 'Queries' and 'Test queries' tabs for description and parmeters for each command.
+See 'Queries' and 'Test queries' tabs for description and parmeters for each command. See https://wiki.loxberry.de/plugins/teslacmd/start for informations regarding installation and integration into Loxone home automation.
 
 ## Example queries
 ### Returns all products including vehicles, powerwalls, and energy sites
@@ -37,7 +37,7 @@ Install vehicle command API on Raspberry (I've not tested steps 3.-5. You may ha
 
 1. Install Tesla Command Plugin as usual for plugins.
 
-2. If you've installed the plugin on a Raspberry PI, Bookworm 64-Bit OS you may skip the manual build of the two binaries for the Tesla Vehicle Command SDK and go directly to step 6.
+2. If you've installed the plugin on a Raspberry PI, you may skip the manual build of the two binaries for the Tesla Vehicle Command SDK and go directly to step 6.
 
 3. Install git (if not done already)
 

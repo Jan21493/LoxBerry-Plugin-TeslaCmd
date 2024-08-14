@@ -21,7 +21,7 @@ function shutdown()
 	}
 }
 
-$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1 ] );
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
 LOGSTART("Start Logging");
 
 // Tesla API
@@ -320,6 +320,7 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 	global $commands;
 	$timeout = 10;
 	LOGINF("BLE Query: $action: start");
+	$action = strtoupper($action);
 
 	$type = $commands->{"$action"}->TYPE;
 	if($type == "GET") {
@@ -537,7 +538,7 @@ function mqttpublish($data, $mqttsubtopic = "")
 										$ssvalue = 0;
 									}
 									$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey", $ssvalue, 0, 1);
-									LOGDEB("mqttpublish: 3 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
+									LOGDEB("mqttpublish(3): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
 								}
 							}
 						} else {
@@ -547,7 +548,7 @@ function mqttpublish($data, $mqttsubtopic = "")
 										if (is_object($ssvalue)) {
 											foreach ($ssvalue as $ssskey => $sssvalue) {
 												$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey", $sssvalue, 0, 1);
-												LOGDEB("mqttpublish: 4 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey: $sssvalue");
+												LOGDEB("mqttpublish(4): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey: $sssvalue");
 											}
 										} else {
 
@@ -559,7 +560,7 @@ function mqttpublish($data, $mqttsubtopic = "")
 													$ssvalue = 0;
 												}
 												$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey", $ssvalue, 0, 1);
-												LOGDEB("mqttpublish: 5 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
+												LOGDEB("mqttpublish(5): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
 											}
 										}
 									}
@@ -574,7 +575,7 @@ function mqttpublish($data, $mqttsubtopic = "")
 											$svalue = 0;
 										}
 										$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey", $svalue, 0, 1);
-										LOGDEB("mqttpublish: 6 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
+										LOGDEB("mqttpublish(6): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
 									}
 								}
 							} else {
@@ -586,7 +587,7 @@ function mqttpublish($data, $mqttsubtopic = "")
 										$svalue = 0;
 									}
 									$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey", $svalue, 0, 1);
-									LOGDEB("mqttpublish: 7 " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
+									LOGDEB("mqttpublish(7): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
 								}
 							}
 						}
@@ -599,24 +600,27 @@ function mqttpublish($data, $mqttsubtopic = "")
 						if ($value === false) {
 							$value = 0;
 						}
+						if ($value === "") {
+							$value = "-";
+						}
 						$countsubtopics = explode("/", $mqttsubtopic);
 						if ($countsubtopics < 3) {
 							$mqtt->publish(MQTTTOPIC . "/summary$mqttsubtopic/$key", $value, 0, 1);
-							LOGDEB("mqttpublish: 8 " . MQTTTOPIC . "/summary$mqttsubtopic/$key: $value");
+							LOGDEB("mqttpublish(8): " . MQTTTOPIC . "/summary$mqttsubtopic/$key: $value");
 						} else {
 							$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key", $value, 0, 1);
-							LOGDEB("mqttpublish: 9 " . MQTTTOPIC . "$mqttsubtopic/$key: $value");
+							LOGDEB("mqttpublish(9): " . MQTTTOPIC . "$mqttsubtopic/$key: $value");
 						}
 					}
 				}
 			}
 		} else {
 			$mqtt->publish(MQTTTOPIC . "$mqttsubtopic", $data, 0, 1);
-			LOGDEB("mqttpublish: 10 " . MQTTTOPIC . "$mqttsubtopic: $data");
+			LOGDEB("mqttpublish(10): " . MQTTTOPIC . "$mqttsubtopic: $data");
 		}
 		//[x] Query timestamp added, changed to mqtt_timestamp
 		$mqtt->publish(MQTTTOPIC . "/mqtt_timestamp", epoch2lox(time()), 0, 1);
-		LOGDEB("mqttpublish: 11 " . MQTTTOPIC . "/mqtt_timestamp: " . epoch2lox(time()));
+		LOGDEB("mqttpublish(11): " . MQTTTOPIC . "/mqtt_timestamp: " . epoch2lox(time()));
 		$mqtt->close();
 	} else {
 		LOGDEB("mqttpublish: MQTT connection failed");
@@ -894,7 +898,7 @@ function read_vehicle_mapping(&$vmap, &$custom_baseblecmd)
 	// Function to read ID to VIN mapping and type of API to use
 	// JSON Array with "device_id", "device_vin", "device_api"
 	// used for vehicle-command API that requires VIN. Currently only type BLE is implemented
-	LOGINF("Read ID to VIN and API mapping and BLE command.");
+	LOGINF("Read ID to VIN, API mapping, and BLE command.");
 	
 	if( !file_exists(APIFILE) ) {
 		

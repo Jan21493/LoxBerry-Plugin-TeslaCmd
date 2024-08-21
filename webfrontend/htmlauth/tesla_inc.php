@@ -318,90 +318,124 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 	// Function to send query via vehicle command API over BLE
 		
 	global $commands;
-	$timeout = 10;
+	$keyno = 1;
+
 	LOGINF("BLE Query: $action: start");
 	$action = strtoupper($action);
-
 	$type = $commands->{"$action"}->TYPE;
-	if($type == "GET") {
+
+	if ($force) {
+		// if command is enforced, then check wake status
+		$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $blebasecmd);
+		LOGDEB("tesla_ble_query: Check if vehicle is asleep: $blefullcmd");
+		$result_code = tesla_shell_exec( "$blefullcmd", $output);
+		$vehicleSleepStatus = "";
+		foreach($output as $key => $line) {
+			if (strpos($line, '"vehicleSleepStatus": "VEHICLE_SLEEP_STATUS_ASLEEP"') > 0) {
+				$vehicleSleepStatus = "sleeping";
+				$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $blebasecmd);
+				LOGDEB("tesla_ble_query: Need to wake vehicle: $blefullcmd");
+				$result_code = tesla_shell_exec( "$blefullcmd", $output);
+				if ($result_code > 0) {
+					LOGDEB("tesla_ble_query: Wakeup failed: result_code= $result_code");
+				} else {
+					LOGDEB("tesla_ble_query: Wakeup was successful");
+					$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
+					LOGDEB("tesla_ble_query: $type: $blefullcmd");
+					$result_code = tesla_shell_exec( "$blefullcmd", $output);
+				}
+				break;
+			} else if (strpos($line, '"vehicleSleepStatus": "VEHICLE_SLEEP_STATUS_AWAKE"') > 0) {
+				$vehicleSleepStatus = "awake";
+				LOGDEB("tesla_ble_query: Vehicle is awake already - no need to wake it up");
+				break;
+			}
+		}
+		if (empty($vehicleSleepStatus)) {
+			LOGDEB("tesla_ble_query: No vehicleSleepStatus in response. Reporting an error!");
+		}
+	} else {
 		$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
 		LOGDEB("tesla_ble_query: $type: $blefullcmd");
 		$result_code = tesla_shell_exec( "$blefullcmd", $output);
+	}
+	
+	// remove logging output from other output
+	foreach($output as $key => $line) {
+		if (strpos($line, "[") == 26 && strpos($line, "]") == 32) {
+			// logging output 
+			if (!empty($logdata))
+				$logdata .= ', '; 
+			$logdata .= '"'.$line.'"';
+			unset($output[$key]);
+		}
+	} 
+	$rawdata = '{"result_code":"'.$result_code.'", ';
+	$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
+
+	if($type == "GET") {
 		if ( $result_code == 0) {
-			$rawdata = '{"result_code":"0", ';
-			$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
 			$rawdata .= '"error_msg":""';
 			if ($action == "BODY_CONTROLLER_STATE")
 				$rawdata .= ', "vehicleNearby":true';
-
-			if (!empty($output) && !empty($output[0])) {
-				// reformat list-keys as json
-				if ($action == "LIST_KEYS") {
-					foreach($output as $key => $line) {
-						$keydata = explode("\t", $line);
-						$rawdata .= ', "key'.$key.'": {"key":"'.$keydata[0].'", "role":"'.$keydata[1].'", "key_form_factor":"'.$keydata[2].'"}';
-					}
-				} else {
-					// remove outer brackets
-					array_shift($output);
-					array_pop($output);
-					// replace state strings with numbers to make it easier for the Loxone miniserver to process the values
-					// enums are defined in https://github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec.proto
-					//	 ClosureState_E, VehicleLockState_E, VehicleSleepStatus_E, UserPresence_E 
-					$rawdata .= ', ';
-					foreach($output as $line) {
-						$line = str_replace('"CLOSURESTATE_CLOSED"', "0", $line);
-						$line = str_replace('"CLOSURESTATE_OPEN"', "1", $line);
-						$line = str_replace('"CLOSURESTATE_AJAR"', "2", $line);
-						$line = str_replace('"CLOSURESTATE_UNKNOWN"', "3", $line);
-						$line = str_replace('"CLOSURESTATE_FAILED_UNLATCH"', "4", $line);
-						$line = str_replace('"CLOSURESTATE_OPENING"', "5", $line);
-						$line = str_replace('"CLOSURESTATE_CLOSING"', "6", $line);
-						$line = str_replace('"VEHICLELOCKSTATE_UNLOCKED"', "0", $line);
-						$line = str_replace('"VEHICLELOCKSTATE_LOCKED"', "1", $line);
-						$line = str_replace('"VEHICLELOCKSTATE_INTERNAL_LOCKED"', "2", $line);
-						$line = str_replace('"VEHICLELOCKSTATE_SELECTIVE_UNLOCKED"', "3", $line);
-						$line = str_replace('"VEHICLE_SLEEP_STATUS_UNKNOWN"', "0", $line);
-						$line = str_replace('"VEHICLE_SLEEP_STATUS_AWAKE"', "1", $line);
-						$line = str_replace('"VEHICLE_SLEEP_STATUS_ASLEEP"', "2", $line);
-						$line = str_replace('"VEHICLE_USER_PRESENCE_UNKNOWN"', "0", $line);
-						$line = str_replace('"VEHICLE_USER_PRESENCE_NOT_PRESENT"', "1", $line);
-						$line = str_replace('"VEHICLE_USER_PRESENCE_PRESENT"', "2", $line);
-						$rawdata .= $line;
-					}
+		
+			// reformat list-keys as json
+			if ($action == "LIST_KEYS") {
+				foreach($output as $key => $line) {
+					$keydata = explode("\t", $line);
+					$rawdata .= ', "key'.$key.'": {"key":"'.$keydata[0].'", "role":"'.$keydata[1].'", "key_form_factor":"'.$keydata[2].'"}';
+					$keyno++;
+				}
+			} else {
+				// remove outer brackets for all other commands (currently only body-controller-state)
+				array_shift($output);
+				array_pop($output);
+				// replace state strings with numbers to make it easier for the Loxone miniserver to process the values
+				// enums are defined in https://github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec.proto
+				//	 ClosureState_E, VehicleLockState_E, VehicleSleepStatus_E, UserPresence_E 
+				$rawdata .= ', ';
+				foreach($output as $line) {
+					$line = str_replace('"CLOSURESTATE_CLOSED"', "0", $line);
+					$line = str_replace('"CLOSURESTATE_OPEN"', "1", $line);
+					$line = str_replace('"CLOSURESTATE_AJAR"', "2", $line);
+					$line = str_replace('"CLOSURESTATE_UNKNOWN"', "3", $line);
+					$line = str_replace('"CLOSURESTATE_FAILED_UNLATCH"', "4", $line);
+					$line = str_replace('"CLOSURESTATE_OPENING"', "5", $line);
+					$line = str_replace('"CLOSURESTATE_CLOSING"', "6", $line);
+					$line = str_replace('"VEHICLELOCKSTATE_UNLOCKED"', "0", $line);
+					$line = str_replace('"VEHICLELOCKSTATE_LOCKED"', "1", $line);
+					$line = str_replace('"VEHICLELOCKSTATE_INTERNAL_LOCKED"', "2", $line);
+					$line = str_replace('"VEHICLELOCKSTATE_SELECTIVE_UNLOCKED"', "3", $line);
+					$line = str_replace('"VEHICLE_SLEEP_STATUS_UNKNOWN"', "0", $line);
+					$line = str_replace('"VEHICLE_SLEEP_STATUS_AWAKE"', "1", $line);
+					$line = str_replace('"VEHICLE_SLEEP_STATUS_ASLEEP"', "2", $line);
+					$line = str_replace('"VEHICLE_USER_PRESENCE_UNKNOWN"', "0", $line);
+					$line = str_replace('"VEHICLE_USER_PRESENCE_NOT_PRESENT"', "1", $line);
+					$line = str_replace('"VEHICLE_USER_PRESENCE_PRESENT"', "2", $line);
+					$rawdata .= $line;
 				}
 			} 
-			$rawdata .= ' }';
 		} else {
-			$rawdata = '{"result_code":"'.$result_code.'", ';
-			$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
-			$rawdata .= '"error_msg":"'.$output[0].'"';
+			$rawdata .= '"error_msg":"'.end($output).'"';
 			if ($action == "BODY_CONTROLLER_STATE")
 				$rawdata .= ', "vehicleNearby":false';
-			$rawdata .= ' }';
 		}
+		$rawdata .= ' }';
 		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
 	} else {
 		//POST
-		$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
-		LOGDEB("tesla_ble_query: $type: $blefullcmd");
-		$result_code = tesla_shell_exec( "$blefullcmd", $output);
-		$rawdata = '{"result_code":"'.$result_code.'", ';
-		$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
-		if (!empty($output) && !empty($output[0])) {
-			$rawdata .= '"error_msg":"'.$output[0].'", ';
+		if ( $result_code == 0) {
+			$rawdata .= '"error_msg":""';
 		} else {
-			$rawdata .= '"error_msg":"", ';
+			$rawdata .= '"error_msg":"'.end($output).'"';
 		}
-		if ($result_code == 0)
-			$rawdata .= '"vehicleNearby":true ';
-		else
-			$rawdata .= '"vehicleNearby":false ';
 		$rawdata .= ' }';
 		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
 	}
-
-	return $rawdata;
+	if (empty($logdata))
+		return $rawdata;
+	else
+		return $rawdata."\n{".$logdata."}";
 }
 
 
@@ -448,7 +482,7 @@ function pretty_print($json_data)
 	//Declare the custom function for formatting
 	//Initialize variable for adding space
 	$space = 0;
-	$flag = false;
+	$withinQuotes = false;
 
 	//Using <pre> tag to format alignment and font
 	echo "<pre>";
@@ -456,51 +490,52 @@ function pretty_print($json_data)
 	//loop for iterating the full json data
 	for($counter=0; $counter<strlen($json_data); $counter++)
 	{
-		//Checking ending second and third brackets
-		if ($json_data[$counter] == '}' || $json_data[$counter] == ']')
-		{
-			$space--;
-			if ($json_data[$counter-1] != '{' && $json_data[$counter-1] != '[') {
+		if (!$withinQuotes) {
+			//Checking ending second and third brackets
+			if ($json_data[$counter] == '}' || $json_data[$counter] == ']') {
+				$space--;
+				if ($json_data[$counter-1] != '{' && $json_data[$counter-1] != '[') {
+					echo "\n";
+					echo str_repeat(' ', ($space*2));
+				}
+			}
+		
+			//Checking for double quote(“) and comma (,)
+			if ($json_data[$counter] == '"') {
+				if ($json_data[$counter-1] == ',' || $json_data[$counter-2] == ',' || $json_data[$counter-3] == ',') {
+					echo "\n";
+					echo str_repeat(' ', ($space*2));
+				}
+				if ( $json_data[$counter-1] == ':' || $json_data[$counter-2] == ':' ) {
+					//Add formatting for text
+					echo '<span style="color:blue;font-weight:bold">';
+				} else {
+					//Add formatting for options
+					echo '<span style="color:red;">';
+				}
+				$withinQuotes = !$withinQuotes;
+			}
+			if ($json_data[$counter] != "\t")
+				echo $json_data[$counter];
+			if ( $json_data[$counter] == ':' && $json_data[$counter+1] != ' ' )
+				echo " ";
+			//Checking starting second and third brackets
+			if ( $json_data[$counter] == '{' || $json_data[$counter] == '[') {
+				if ($json_data[$counter+1] != '}' && $json_data[$counter+1] != ']') {
+					$space++;
+				}
 				echo "\n";
 				echo str_repeat(' ', ($space*2));
 			}
-		}
-	 
-		//Checking for double quote(“) and comma (,)
-		if ($json_data[$counter] == '"' && 
-		    ($json_data[$counter-1] == ',' || $json_data[$counter-2] == ',' || $json_data[$counter-3] == ','))
-		{
-			echo "\n";
-			echo str_repeat(' ', ($space*2));
-		}
-		
-		if ( $json_data[$counter] == '"' && !$flag )
-		{
-			if ( $json_data[$counter-1] == ':' || $json_data[$counter-2] == ':' )
-			//Add formatting for text
-			echo '<span style="color:blue;font-weight:bold">';
-			else
-			//Add formatting for options
-			echo '<span style="color:red;">';
-		}
-		if ($json_data[$counter] != "\t")
-			echo $json_data[$counter];
-		if ( $json_data[$counter] == ':' && $json_data[$counter+1] != ' ' )
-			echo " ";
-		//Checking conditions for adding closing span tag
-		if ( $json_data[$counter] == '"' && $flag )
-		echo '</span>';
-		if ( $json_data[$counter] == '"' )
-		$flag = !$flag;
-
-		//Checking starting second and third brackets
-		if ( $json_data[$counter] == '{' || $json_data[$counter] == '[' )
-			{
-			if ($json_data[$counter+1] != '}' && $json_data[$counter+1] != ']') {
-				$space++;
+		} else {
+			// within quotes - just print and check for closing quote
+			if ($json_data[$counter] != "\t")
+				echo $json_data[$counter];
+			//Checking conditions for adding closing span tag
+			if ($json_data[$counter] == '"') {
+				echo '</span>';
+				$withinQuotes = !$withinQuotes;
 			}
-			echo "\n";
-			echo str_repeat(' ', ($space*2));
 		}
 	}
 	echo "</pre>";

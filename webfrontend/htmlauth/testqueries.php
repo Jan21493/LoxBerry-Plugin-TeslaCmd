@@ -185,8 +185,8 @@ if($tokenvalid == "false") {
 			<td></td>
 			<td>
 <?php
-		// wake up is available for vehicles only and not if a wake up command is selected
-		if ($type == $vid && isset($selected_vehicle->vin) && strpos($command->URI, 'wake') === false && strpos($command->BLECMD, 'wake') === false) {
+		// wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested
+		if ($type == $vid && isset($selected_vehicle->vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
 ?>				
                     <fieldset data-role="controlgroup">
                         <input
@@ -342,7 +342,7 @@ if($tokenvalid == "false") {
 						if ($force) {
 							$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $blebasecmd);
 							echo "Get status: <span class=\"mono\">".$blefullcmd."</span><br>";
-							$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE_UP"}->BLECMD, $blebasecmd);
+							$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $blebasecmd);
 							echo "If asleep: <span class=\"mono\">".$blefullcmd."</span><br>";
 						}
 						$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);

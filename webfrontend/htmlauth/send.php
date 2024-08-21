@@ -55,11 +55,14 @@ if (isset($vid)) {
 	} 
 } 
 
-// Define force
-if(!empty($_REQUEST["force"])) { 
-	$force = $_REQUEST["force"];
-} elseif (!empty($_REQUEST["f"])) { 
-	$force = $_REQUEST["f"];
+// wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested
+if ($type == $vid && isset($selected_vehicle->vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
+	// Define force
+	if(!empty($_REQUEST["force"])) { 
+		$force = $_REQUEST["force"];
+	} elseif (!empty($_REQUEST["f"])) { 
+		$force = $_REQUEST["f"];
+	}
 }
 
 if(isset($command)) {

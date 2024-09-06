@@ -362,7 +362,7 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 	
 	// remove logging output from other output
 	foreach($output as $key => $line) {
-		if (strpos($line, "[") == 26 && strpos($line, "]") == 32) {
+		if (strpos($line, "[") == 26) {
 			// logging output 
 			if (!empty($logdata))
 				$logdata .= ', '; 
@@ -746,6 +746,10 @@ function tesla_shell_exec( $command, &$output)
 	LOGDEB("tesla_shell_exec: exec finished");
 	// Debugging
 	LOGDEB("tesla_shell_exec: result code: " . $result_code);
+
+	foreach($output as $key => $line) {
+		LOGDEB("tesla_shell_exec: output: " . str_replace("\t", "  ", $line));
+	}
 
 	return $result_code;
 }

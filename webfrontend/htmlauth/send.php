@@ -56,7 +56,7 @@ if (isset($vid)) {
 } 
 
 // wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested
-if ($type == $vid && isset($selected_vehicle->vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
+if (isset($vid) && isset($vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
 	// Define force
 	if(!empty($_REQUEST["force"])) { 
 		$force = $_REQUEST["force"];
@@ -71,6 +71,7 @@ if(isset($command)) {
 	$command_output = "";
 	$command_error = false;
 
+
 	// error if command is not supported with selected api
 	if (!in_array($api, $command->API)) {
 		$command_output = "Command is not supported in ".$apinames[int($api)].". Verify API settings.\n";
@@ -81,7 +82,7 @@ if(isset($command)) {
 	if (!empty($command->TAG)) {
 		// a command for a specific vehicle or energy site is selected
 		if(!empty($vid)) {
-			LOGDEB("tesla_command: vid: ".$vid.", vin: ".$vin);
+			LOGDEB("tesla_command: vid: ".$vid.", vin: ".$vin.($force ? ", force: $force" : ""));
 		} else {
 			// error if vid is no provided, but required for the command
 			$command_output =  $command_output."Parameter \"VID\" (ID of vehicle or energy site) is missing, but required for the command.\n";

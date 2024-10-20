@@ -226,6 +226,8 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 			LOGDEB("tesla_query: $type: $uri");
 			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, false ));
 			$data = json_decode($rawdata);
+			$data->response->{"sentAtTimeLox"} = epoch2lox();
+			$data->response->{"sentAtTimeISO"} = currtime();
 			
 			if (!empty($data->error)) {
 				if (preg_match("/vehicle unavailable/i", $data->error) and $force==true) {
@@ -331,7 +333,8 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 		$result_code = tesla_shell_exec( "$blefullcmd", $output);
 		$vehicleSleepStatus = "";
 		foreach($output as $key => $line) {
-			if (strpos($line, '"vehicleSleepStatus": "VEHICLE_SLEEP_STATUS_ASLEEP"') > 0) {
+			if (strpos($line, '"vehicleSleepStatus"') > 0 && strpos($line, '"VEHICLE_SLEEP_STATUS_ASLEEP"') > 0) {
+				// vehicle is sleeping
 				$vehicleSleepStatus = "sleeping";
 				$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $blebasecmd);
 				LOGDEB("tesla_ble_query: Need to wake vehicle: $blefullcmd");
@@ -339,30 +342,37 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 				if ($result_code > 0) {
 					LOGDEB("tesla_ble_query: Wakeup failed: result_code= $result_code");
 				} else {
-					LOGDEB("tesla_ble_query: Wakeup was successful");
-					$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
-					LOGDEB("tesla_ble_query: $type: $blefullcmd");
-					$result_code = tesla_shell_exec( "$blefullcmd", $output);
+					LOGDEB("tesla_ble_query: Wakeup was successful! Waiting 3 seconds.");
+					sleep(3);
 				}
 				break;
-			} else if (strpos($line, '"vehicleSleepStatus": "VEHICLE_SLEEP_STATUS_AWAKE"') > 0) {
+			} else if (strpos($line, '"vehicleSleepStatus"') > 0 && strpos($line, '"VEHICLE_SLEEP_STATUS_AWAKE"') > 0) {
+				// vehicle is awake
 				$vehicleSleepStatus = "awake";
 				LOGDEB("tesla_ble_query: Vehicle is awake already - no need to wake it up");
 				break;
 			}
 		}
 		if (empty($vehicleSleepStatus)) {
-			LOGDEB("tesla_ble_query: No vehicleSleepStatus in response. Reporting an error!");
+			LOGERR("tesla_ble_query: No vehicleSleepStatus in response. Reporting an error!");
+			// but sending requested command anyway (as without force)
 		}
-	} else {
-		$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
-		LOGDEB("tesla_ble_query: $type: $blefullcmd");
-		$result_code = tesla_shell_exec( "$blefullcmd", $output);
+	} 
+	// sending requested command
+	$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
+	LOGDEB("tesla_ble_query: (type: $type) $blefullcmd");
+	$result_code = tesla_shell_exec( "$blefullcmd", $output);
+	
+	// full debugging
+	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
+	foreach($output as $key => $line) {
+		LOGDEB("$line");
 	}
+	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
 	
 	// remove logging output from other output
 	foreach($output as $key => $line) {
-		if (strpos($line, "[") == 26) {
+		if (strpos($line, "[") == 24 && strpos($line, "]") > 28 && strpos($line, "]") < 31) {
 			// logging output 
 			if (!empty($logdata))
 				$logdata .= ', '; 
@@ -376,9 +386,12 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 	if($type == "GET") {
 		if ( $result_code == 0) {
 			$rawdata .= '"error_msg":""';
-			if ($action == "BODY_CONTROLLER_STATE")
+			if ($action == "BODY_CONTROLLER_STATE") {
 				$rawdata .= ', "vehicleNearby":true';
-		
+				$rawdata .= ', "sentAtTimeLox":'.epoch2lox();
+				$rawdata .= ', "sentAtTimeISO":"'.currtime().'"';
+	
+			}
 			// reformat list-keys as json
 			if ($action == "LIST_KEYS") {
 				foreach($output as $key => $line) {
@@ -551,7 +564,6 @@ function mqttpublish($data, $mqttsubtopic = "")
 	// MQTT requires a unique client id
 	$client_id = uniqid(gethostname() . "_client");
 	$creds = mqtt_connectiondetails();
-
 	// Be careful about the required namespace on inctancing new objects:
 	$mqtt = new Bluerhinos\phpMQTT($creds['brokerhost'], $creds['brokerport'], $client_id);
 
@@ -735,21 +747,33 @@ function tesla_shell_exec( $command, &$output)
 	$output=NULL;
 	$result_code=NULL;
 	exec($command, $output, $result_code);
-//	$result_code = 0;
-//	$output = $command;
 
+	//Did an error occur? If so, repeat the command one time (one retry only)
+	if ($result_code > 0) {
+		// On an Orange PI zero 3 with DietPi v9.7.1 (Bookworm, released July 2024) the command returned errors after typically 1-2 hours
+		// so this 'dirty' fix was added. ToDo: add verification : cat /sys/firmware/devicetree/base/model
+		exec("cat /sys/firmware/devicetree/base/model", $output2, $result_code2);
+		if (($result_code2 == 0) && ($output2=="OrangePi Zero3")){
+			LOGINF("tesla_shell_exec: result code " . $result_code);
+			LOGDEB("tesla_shell_exec: OrangePi Zero3 detected!");
+			LOGDEB("tesla_shell_exec: restarting aw859a-bluetooth.service!");
+			exec("sudo systemctl restart aw859a-bluetooth.service", $output2, $result_code2);
+			sleep(5);
+			LOGDEB("tesla_shell_exec: repeating command after waiting 5 seconds ...");
+			exec($command, $output, $result_code);
+		} else {
+			LOGDEB("tesla_shell_exec: $output2 detected! Last command is not repeated.");
+			// additional detections and restart of service may be added for specific platforms if required
+		}
+	}
 	//Did an error occur? If so, dump it out.
 	if(is_null($result_code != 0)){
 		LOGERR("tesla_shell_exec: result code " . $result_code);
 	}
-
+	
 	LOGDEB("tesla_shell_exec: exec finished");
 	// Debugging
 	LOGDEB("tesla_shell_exec: result code: " . $result_code);
-
-	foreach($output as $key => $line) {
-		LOGDEB("tesla_shell_exec: output: " . str_replace("\t", "  ", $line));
-	}
 
 	return $result_code;
 }

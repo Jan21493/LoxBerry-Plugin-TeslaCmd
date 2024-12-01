@@ -69,6 +69,8 @@ if (isset($_GET['delete_token'])) {
     foreach ($_POST as $index => $entry) {
         if ($index == "baseblecmd") {
             $custom_baseblecmd = $entry;
+        } elseif ($index == "ble_repeat")  {
+            $ble_repeat = $entry;
         } elseif ($index != "dummy")  {
             $pieces = explode("-", $entry);
             if ($pieces[0] != "") {
@@ -77,7 +79,7 @@ if (isset($_GET['delete_token'])) {
             }
         }
     }
-    write_vehicle_mapping($vmap, $custom_baseblecmd);
+    write_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat);
     echo "<script> location.href='index.php'; </script>";
 } else if(isset($_POST["login"])) {
 	$output = json_decode(login($_POST["weburl"], $_POST["code_verifier"], $_POST["code_challenge"], $_POST["state"]));
@@ -188,33 +190,56 @@ See <a href="https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-
 
 <?php
 	$vehicles = tesla_summary();
-    read_vehicle_mapping($vmap, $custom_baseblecmd);
+    read_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat);
     vehicles_add_api_attribute($vehicles, $vmap);
 ?>
-    <div style="flex: 0 0 95%;padding:5px" data-role="fieldcontain">
-        <label for="summarylink">
-            <strong>Default BLE command</strong><br>
-            <span class="hint">Local Tesla control command. {vehicle_tag} tag will be replaced by VIN. {command} will be replaced with specific Tesla control command and params.</span></label>
-        <input
-            type="text"
-            id="dummy"
-            name="dummy"
-            data-mini="true"
-            value="<?=$default_baseblecmd; ?>"
-            readonly="readonly">
-    </div>
-    <div style="flex: 0 0 95%;padding:5px" data-role="fieldcontain">
-        <label for="summarylink">
-            <strong>Custom BLE command</strong><br>
-            <span class="hint">Overwrite default BLE command or leave empty for default. Only single quotes allowed (no double quotes).</span></label>
-        <input
-            type="text"
-            id="baseblecmd"
-            name="baseblecmd"
-            data-mini="true"
-            value="<?=$custom_baseblecmd; ?>">
-    </div>
-
+    <table>
+        <colgroup>
+            <col span="1" style="width: 30%;">
+            <col span="1" style="width: 10%;">
+            <col span="1" style="width: 10%;">
+            <col span="1" style="width: 10%;">
+            <col span="1" style="width: 50%;">
+        </colgroup>
+        <tr>
+            <td>
+                <label for="summarylink"><strong>Default BLE command</strong><br>
+                <span class="hint">Local Tesla control command. {vehicle_tag} tag will be replaced by VIN. {command} will be replaced with specific Tesla control command and params.</span></label>
+            </td>
+            <td colspan=4>
+                <input
+                    type="text"
+                    id="dummy"
+                    name="dummy"
+                    data-mini="true"
+                    value="<?=$default_baseblecmd; ?>"
+                    readonly="readonly">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="summarylink"><strong>Custom BLE command</strong><br>
+                <span class="hint">Overwrite default BLE command or leave empty for default. Only single quotes allowed (no double quotes).</span></label>
+            </td>
+            <td colspan=4>
+                <input
+                    type="text"
+                    id="baseblecmd"
+                    name="baseblecmd"
+                    data-mini="true"
+                    value="<?=$custom_baseblecmd; ?>">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="summarylink"><strong>Repeat BLE command</strong><br>
+                <span class="hint">Repeat BLE commands in case an error is returned to increase reliability. Note: it may take longer to execute the command.</span></label>
+            </td>
+            <td><input type="radio" id="rep0" name="ble_repeat" data-mini="true" value="0" <?php if ($ble_repeat == "0") echo "checked"; ?>/><label for="rep0">No repeat</label></td>
+            <td><input type="radio" id="rep1" name="ble_repeat" data-mini="true" value="1" <?php if ($ble_repeat == "1") echo "checked"; ?>/><label for="rep1">Repeat once</label></td>
+            <td><input type="radio" id="rep2" name="ble_repeat" data-mini="true" value="2" <?php if ($ble_repeat == "2") echo "checked"; ?>/><label for="rep2">Repeat twice</label></td>
+        </tr>
+    </table>            
 
     <div class="form-group">
 	<table data-role="table" data-mode="columntoggle" data-filter="true" data-input="#filterTable-input" class="ui-body-d ui-shadow table-stripe ui-responsive" data-column-btn-text="Show columns">

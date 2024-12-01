@@ -354,8 +354,9 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 			}
 		}
 		if (empty($vehicleSleepStatus)) {
-			LOGERR("tesla_ble_query: No vehicleSleepStatus in response. Reporting an error!");
-			// but sending requested command anyway (as without force)
+			// there is no vehicleSleepStatus in response, if BODY_CONTROLLER_STATE failed, e.g. the vehicle was away.
+			LOGINFO("tesla_ble_query: No vehicleSleepStatus in response. 'body-controller-state' has failed, e.g. due to the fact that the vehicle was away!");
+			// but sending requested command anyway (as without force) - not sure if this should be changed to skip the command.
 		}
 	} 
 	// sending requested command
@@ -372,7 +373,7 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 	
 	// remove logging output from other output
 	foreach($output as $key => $line) {
-		if (strpos($line, "[") == 24 && strpos($line, "]") > 28 && strpos($line, "]") < 31) {
+		if (strpos($line, "[") > 20 && strpos($line, "]") > 25 && strpos($line, "]") < 35) {
 			// logging output 
 			if (!empty($logdata))
 				$logdata .= ', '; 
@@ -380,17 +381,15 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 			unset($output[$key]);
 		}
 	} 
-	$rawdata = '{"result_code":"'.$result_code.'", ';
+	$rawdata = '{"result_code":'.$result_code.', ';
 	$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
-
+	$rawdata .= '"sentAtTimeLox":'.epoch2lox().', ';
+	$rawdata .= '"sentAtTimeISO":"'.currtime().'", ';
 	if($type == "GET") {
 		if ( $result_code == 0) {
 			$rawdata .= '"error_msg":""';
 			if ($action == "BODY_CONTROLLER_STATE") {
 				$rawdata .= ', "vehicleNearby":true';
-				$rawdata .= ', "sentAtTimeLox":'.epoch2lox();
-				$rawdata .= ', "sentAtTimeISO":"'.currtime().'"';
-	
 			}
 			// reformat list-keys as json
 			if ($action == "LIST_KEYS") {
@@ -400,7 +399,7 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 					$keyno++;
 				}
 			} else {
-				// remove outer brackets for all other commands (currently only body-controller-state)
+				// remove outer brackets for all other commands (currently only body-controller-state and state <catgegory>)
 				array_shift($output);
 				array_pop($output);
 				// replace state strings with numbers to make it easier for the Loxone miniserver to process the values
@@ -430,10 +429,12 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 			} 
 		} else {
 			$rawdata .= '"error_msg":"'.end($output).'"';
-			if ($action == "BODY_CONTROLLER_STATE")
+			if ($action == "BODY_CONTROLLER_STATE") {
 				$rawdata .= ', "vehicleNearby":false';
+			}
 		}
 		$rawdata .= ' }';
+		//echo "<pre>RAWDATA:<br>";var_dump($rawdata);echo "</pre>";
 		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
 	} else {
 		//POST
@@ -490,12 +491,24 @@ function get_result_code_msg($result_code)
 	return $result_code_msg;
 }
 
+function pretty_print_old($json)
+{
+    $array = json_decode($json, true);
+    $json = json_encode($array, JSON_PRETTY_PRINT);
+	
+	//Using <pre> tag to format alignment and font
+	echo "<pre>";
+	echo $json;
+	echo "</pre>";
+}
+
 function pretty_print($json_data)
 {
 	//Declare the custom function for formatting
 	//Initialize variable for adding space
 	$space = 0;
 	$withinQuotes = false;
+	$aftercolon = false;
 
 	//Using <pre> tag to format alignment and font
 	echo "<pre>";
@@ -507,19 +520,15 @@ function pretty_print($json_data)
 			//Checking ending second and third brackets
 			if ($json_data[$counter] == '}' || $json_data[$counter] == ']') {
 				$space--;
-				if ($json_data[$counter-1] != '{' && $json_data[$counter-1] != '[') {
+				if ( $json_data[$counter-1] != '{' && $json_data[$counter-1] != '[') {
 					echo "\n";
 					echo str_repeat(' ', ($space*2));
 				}
+				$aftercolon = false;
 			}
-		
 			//Checking for double quote(“) and comma (,)
 			if ($json_data[$counter] == '"') {
-				if ($json_data[$counter-1] == ',' || $json_data[$counter-2] == ',' || $json_data[$counter-3] == ',') {
-					echo "\n";
-					echo str_repeat(' ', ($space*2));
-				}
-				if ( $json_data[$counter-1] == ':' || $json_data[$counter-2] == ':' ) {
+				if ( $aftercolon ) {
 					//Add formatting for text
 					echo '<span style="color:blue;font-weight:bold">';
 				} else {
@@ -528,17 +537,25 @@ function pretty_print($json_data)
 				}
 				$withinQuotes = !$withinQuotes;
 			}
-			if ($json_data[$counter] != "\t")
+			if (($json_data[$counter] != "\t") && ($json_data[$counter] != " "))
 				echo $json_data[$counter];
-			if ( $json_data[$counter] == ':' && $json_data[$counter+1] != ' ' )
+			if ( $json_data[$counter] == ':' ) {
 				echo " ";
-			//Checking starting second and third brackets
-			if ( $json_data[$counter] == '{' || $json_data[$counter] == '[') {
-				if ($json_data[$counter+1] != '}' && $json_data[$counter+1] != ']') {
-					$space++;
-				}
+				$aftercolon = true;
+			}
+			if ($json_data[$counter] == ',') {
 				echo "\n";
 				echo str_repeat(' ', ($space*2));
+				$aftercolon = false;
+			}
+			//Checking starting second and third brackets
+			if ( $json_data[$counter] == '{' || $json_data[$counter] == '[') {
+				$space++;
+				if ($json_data[$counter+1] != '}' && $json_data[$counter+1] != ']') {
+					echo "\n";
+					echo str_repeat(' ', ($space*2));
+				}
+				$aftercolon = false;
 			}
 		} else {
 			// within quotes - just print and check for closing quote
@@ -554,12 +571,45 @@ function pretty_print($json_data)
 	echo "</pre>";
 }
 
+function mqttpublishdata($mqtt, $data, $mqttsubtopic)
+{
+	// LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic - called");
+	// if data is an object or array, then call this function for each element
+	if (is_object($data) or is_array($data)) {
+		$count = 0;
+		foreach ($data as $key => $value) {
+			$count++;
+			// LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic - key: $key");
+			mqttpublishdata($mqtt, $value, "$mqttsubtopic/$key");
+		}
+		if ($count == 0) {
+			// no value, e.g. empty array. Some commands e.g. state charge have empty objects. Set to NULL (needs to be tested!)
+			$mqtt->publish(MQTTTOPIC . "$mqttsubtopic", "", 0, 1);
+			LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic: NULL");
+		} 
+	} else {
+		if (is_array($data)) {
+			$data = implode(",", $data);
+		}
+		// bugfix for false
+		if (is_bool($data)) {
+			if ($data)
+				$data = 1;
+			else
+				$data = 0;
+		}
+		if (!isset($data)) {
+			$data = "NULL";
+		}
+		$mqtt->publish(MQTTTOPIC . "$mqttsubtopic", $data, 0, 1);
+		LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic: $data");
+	}
+}
 
 function mqttpublish($data, $mqttsubtopic = "")
 {
 	// Function to send data to mqtt
-	// [ ] Bugfix missing 0 values
-	// [ ] Bugfix missing false output
+	//echo "<pre>DATA:<br>";var_dump($data);echo "</pre>";
 
 	// MQTT requires a unique client id
 	$client_id = uniqid(gethostname() . "_client");
@@ -570,104 +620,12 @@ function mqttpublish($data, $mqttsubtopic = "")
 	if ($mqtt->connect(true, NULL, $creds['brokeruser'], $creds['brokerpass'])) {
 		LOGDEB("mqttpublish: MQTT connection successful, topic: ".MQTTTOPIC);
 		LOGOK("MQTT: Connection successful.");
+		// publish all data
+		mqttpublishdata($mqtt, $data, $mqttsubtopic);
 
-		if (is_object($data) or is_array($data)) {
-			foreach ($data as $key => $value) {
-				if (is_object($value)) {
-					foreach ($value as $skey => $svalue) {
-						if (is_object($svalue)) {
-							foreach ($svalue as $sskey => $ssvalue) {
-								if (isset($ssvalue)) {
-									if ($sskey == "timestamp") {
-										$ssvalue = epoch2lox(substr($ssvalue, 0, 10));
-									} //epochetime maxlength
-									if ($ssvalue === false) {
-										$ssvalue = 0;
-									}
-									$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey", $ssvalue, 0, 1);
-									LOGDEB("mqttpublish(3): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
-								}
-							}
-						} else {
-							if (is_array($svalue)) {
-								if (is_object($svalue[0])) {
-									foreach ($svalue as $sskey => $ssvalue) {
-										if (is_object($ssvalue)) {
-											foreach ($ssvalue as $ssskey => $sssvalue) {
-												$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey", $sssvalue, 0, 1);
-												LOGDEB("mqttpublish(4): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey/$ssskey: $sssvalue");
-											}
-										} else {
-
-											if (isset($ssvalue)) {
-												if ($sskey == "timestamp") {
-													$ssvalue = epoch2lox(substr($ssvalue, 0, 10));
-												} //epochetime maxlength
-												if ($ssvalue === false) {
-													$ssvalue = 0;
-												}
-												$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey", $ssvalue, 0, 1);
-												LOGDEB("mqttpublish(5): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey/$sskey: $ssvalue");
-											}
-										}
-									}
-								} else {
-									$svalue = implode(",", $svalue);
-
-									if (isset($svalue)) {
-										if ($skey == "timestamp") {
-											$svalue = epoch2lox(substr($svalue, 0, 10));
-										} //epochetime maxlength
-										if ($svalue === false) {
-											$svalue = 0;
-										}
-										$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey", $svalue, 0, 1);
-										LOGDEB("mqttpublish(6): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
-									}
-								}
-							} else {
-								if (isset($svalue)) {
-									if ($skey == "timestamp") {
-										$svalue = epoch2lox(substr($svalue, 0, 10));
-									} //epochetime maxlength
-									if ($svalue === false) {
-										$svalue = 0;
-									}
-									$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key/$skey", $svalue, 0, 1);
-									LOGDEB("mqttpublish(7): " . MQTTTOPIC . "$mqttsubtopic/$key/$skey: $svalue");
-								}
-							}
-						}
-					}
-				} else {
-					if (isset($value)) {
-						if (is_array($value)) {
-							$value = implode(",", $value);
-						}
-						if ($value === false) {
-							$value = 0;
-						}
-						if ($value === "") {
-							$value = "-";
-						}
-						$countsubtopics = explode("/", $mqttsubtopic);
-						if ($countsubtopics < 3) {
-							$mqtt->publish(MQTTTOPIC . "/summary$mqttsubtopic/$key", $value, 0, 1);
-							LOGDEB("mqttpublish(8): " . MQTTTOPIC . "/summary$mqttsubtopic/$key: $value");
-						} else {
-							$mqtt->publish(MQTTTOPIC . "$mqttsubtopic/$key", $value, 0, 1);
-							LOGDEB("mqttpublish(9): " . MQTTTOPIC . "$mqttsubtopic/$key: $value");
-						}
-					}
-				}
-			}
-		} else {
-			$mqtt->publish(MQTTTOPIC . "$mqttsubtopic", $data, 0, 1);
-			LOGDEB("mqttpublish(10): " . MQTTTOPIC . "$mqttsubtopic: $data");
-		}
 		//[x] Query timestamp added, changed to mqtt_timestamp
 		$mqtt->publish(MQTTTOPIC . "/mqtt_timestamp", epoch2lox(time()), 0, 1);
-		LOGDEB("mqttpublish(11): " . MQTTTOPIC . "/mqtt_timestamp: " . epoch2lox(time()));
+		LOGDEB("mqttpublish: " . MQTTTOPIC . "/mqtt_timestamp: " . epoch2lox(time()));
 		$mqtt->close();
 	} else {
 		LOGDEB("mqttpublish: MQTT connection failed");
@@ -751,18 +709,30 @@ function tesla_shell_exec( $command, &$output)
 	//Did an error occur? If so, repeat the command one time (one retry only)
 	if ($result_code > 0) {
 		// On an Orange PI zero 3 with DietPi v9.7.1 (Bookworm, released July 2024) the command returned errors after typically 1-2 hours
-		// so this 'dirty' fix was added. ToDo: add verification : cat /sys/firmware/devicetree/base/model
+		// so this 'dirty' fix was added that restarts the bluetooth service. There might be an error in the bluetooth driver that I can't fix.
 		exec("cat /sys/firmware/devicetree/base/model", $output2, $result_code2);
-		if (($result_code2 == 0) && ($output2=="OrangePi Zero3")){
+		$model = $output2[0];
+		if (($result_code2 == 0) && ($model=="OrangePi Zero3")){
 			LOGINF("tesla_shell_exec: result code " . $result_code);
-			LOGDEB("tesla_shell_exec: OrangePi Zero3 detected!");
+			LOGDEB("tesla_shell_exec: '$model' detected!");
 			LOGDEB("tesla_shell_exec: restarting aw859a-bluetooth.service!");
 			exec("sudo systemctl restart aw859a-bluetooth.service", $output2, $result_code2);
 			sleep(5);
 			LOGDEB("tesla_shell_exec: repeating command after waiting 5 seconds ...");
 			exec($command, $output, $result_code);
 		} else {
-			LOGDEB("tesla_shell_exec: $output2 detected! Last command is not repeated.");
+			if (ble_repeat == "rep0") {
+				LOGDEB("tesla_shell_exec: '$model' detected! Last command is not repeated.");
+			} else {
+				LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated after waiting 5 seconds ...");				
+				sleep(5);
+				exec($command, $output, $result_code);
+				if ((ble_repeat == "rep2") && ($result_code != 0)) {
+					LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated again after waiting 5 seconds ...");				
+					sleep(5);
+					exec($command, $output, $result_code);
+				}
+			} 
 			// additional detections and restart of service may be added for specific platforms if required
 		}
 	}
@@ -956,7 +926,7 @@ function tesla_oauth2_refresh_token($bearer_refresh_token)
     return $bearer_token;
 }
 
-function read_vehicle_mapping(&$vmap, &$custom_baseblecmd)
+function read_vehicle_mapping(&$vmap, &$custom_baseblecmd, &$ble_repeat)
 {
 	// Function to read ID to VIN mapping and type of API to use
 	// JSON Array with "device_id", "device_vin", "device_api"
@@ -976,9 +946,12 @@ function read_vehicle_mapping(&$vmap, &$custom_baseblecmd)
 		$custom_baseblecmd = $apidata->{"baseblecmd"};
 	else
 		$custom_baseblecmd = $default_baseblecmd;
+	if ($apidata->{"blerepeat"})
+		$ble_repeat = $apidata->{"blerepeat"};
+
 }
 
-function write_vehicle_mapping($vmap, $custom_baseblecmd)
+function write_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat)
 {
 	// Function to write ID to VIN mapping and type of API to use
     // see read function for details about content
@@ -987,8 +960,10 @@ function write_vehicle_mapping($vmap, $custom_baseblecmd)
 	$apidata = new stdClass();
 	if (isset($vmap))
 		$apidata->{"id-mapping"} = $vmap;
-	if (isset($custom_baseblecmd))
+		if (isset($custom_baseblecmd))
 		$apidata->{"baseblecmd"} = $custom_baseblecmd;
+	if (isset($ble_repeat))
+		$apidata->{"blerepeat"} = $ble_repeat;
 
 	$apidata = json_encode($apidata);	
 	LOGDEB("write_vehicle_mapping: write apifile.");

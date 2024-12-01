@@ -132,7 +132,19 @@
         "URI": "",
         "AUTH": true,
         "BLECMD": "body-controller-state",
-        "DESC": "Fetch limited vehicle state information. Works over BLE even when infotainment / vehicle is asleep. "
+        "DESC": "Fetch limited vehicle state information. Works over BLE even when infotainment / vehicle is asleep."
+    },
+    "STATE": {
+        "API": [1],
+        "TYPE": "GET",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "state {category}",
+        "DESC": "Fetch vehicle state over BLE.",
+        "PARAM": {
+            "category": "One of 'tire-pressure', 'parental-controls', 'closures', 'charge-schedule', 'drive', 'precondition-schedule', 'media', 'media-detail', 'software-update', 'charge', or 'climate'."
+        }
     },
     "WAKE_UP": {
         "API": [0, 1],
@@ -556,6 +568,68 @@
         "BLECMD": "charging-schedule-cancel",
         "DESC": "Cancel scheduled charge start."
     },
+    "CHARGING_SCHEDULE_ADD": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "charging-schedule-add {days} {time} {latitude} {longitude} {repeat} {id} {enabled}",
+        "DESC": "Schedule charge for DAYS START_TIME-END_TIME at LATITUDE LONGITUDE for [ID].",
+        "PARAM": {
+            "days": "Comma-separated list of any of Sun, Mon, Tues, Wed, Thurs, Fri, Sat OR all OR weekdays.",
+            "time": "Time interval to charge (24-hour clock). Examples: '22:00-6:00', '-6:00', '20:32-'. The END_TIME may be on the following day.",
+            "latitude": "Latitude of charging site.",
+            "longitude": "Longitude of charging site.",
+            "repeat": "Set to 'once' or omit to repeat weekly.",
+            "id": "The ID of the charge schedule to modify. Not required for new schedules.",
+            "enabled": "Whether the charge schedule is enabled. Expects 'true' or 'false'. Defaults to 'true' if omitted."
+        }    
+    },
+    "CHARGING_SCHEDULE_REMOVE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "charging-schedule-remove {type} {id}",
+        "DESC": "Removes charging schedule of TYPE [ID].",
+        "PARAM": {
+            "type": "Either 'home', 'work', 'other', or 'id'.",
+            "id": "The numeric ID of the charge schedule to remove when TYPE is set to 'id', otherwise omit it."
+        }    
+    },
+    "PRECONDITION_SCHEDULE_ADD": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "precondition-schedule-add {days} {time} {latitude} {longitude} {repeat} {id} {enabled}",
+        "DESC": "Schedule precondition for DAYS TIME at LATITUDE LONGITUDE.",
+        "PARAM": {
+            "days": "Comma-separated list of any of Sun, Mon, Tues, Wed, Thurs, Fri, Sat OR all OR weekdays.",
+            "time": "Time to precondition by. Example: '22:00'.",
+            "latitude": "Latitude of location to precondition at.",
+            "longitude": "Longitude of location to precondition at.",
+            "repeat": "Set to 'once' or omit to repeat weekly.",
+            "id": "The ID of the precondition schedule to modify. Not required for new schedules.",
+            "enabled": "Whether the precondition schedule is enabled. Expects 'true' or 'false'. Defaults to 'true' if omitted."
+        }    
+    },
+    "PRECONDITION_SCHEDULE_REMOVE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "precondition-schedule-remove {type} {id}",
+        "DESC": "Removes precondition schedule of TYPE [ID]",
+        "PARAM": {
+            "type": "Either 'home', 'work', 'other', or 'id'.",
+            "id": "The numeric ID of the precondition schedule to remove when TYPE is set to 'id', otherwise omit it."
+        }    
+    },
     "SET_VALET_MODE": {
         "API": [0],
         "TYPE": "POST",
@@ -567,6 +641,27 @@
         "PARAM": {
             "on": "True to turn on, false to turn off.",
             "password": "A PIN to deactivate Valet Mode (e.g. 1234). "
+        }
+    },
+    "VALET_MODE_OFF": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "valet-mode-off",
+        "DESC": "Disable valet mode."
+    },
+    "VALET_MODE_ON": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "valet-mode-on {pin}",
+        "DESC": "Enable valet mode and set pin.",
+        "PARAM": {
+            "pin": "A PIN to deactivate Valet Mode (e.g. 1234)."
         }
     },
     "RESET_VALET_PIN": {
@@ -601,6 +696,33 @@
         "PARAM": {
             "state": "'on' or 'off'."
         }
+    },
+    "TONNEAU_CLOSE": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "tonneau-close",
+        "DESC": "Close Cybertruck tonneau."
+    },
+    "TONNEAU_OPEN": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "tonneau-open",
+        "DESC": "Open Cybertruck tonneau."
+    },
+    "TONNEAU_STOP": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "tonneau-stop",
+        "DESC": "Stop moving Cybertruck tonneau."
     },
     "MEDIA_SET_VOLUME": {
         "API": [1],
@@ -643,6 +765,33 @@
         "AUTH": true,
         "BLECMD": "software-update-cancel",
         "DESC": "Cancel a pending software update."
+    },
+    "GUEST_MODE_OFF": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "guest-mode-off",
+        "DESC": "Disable Guest Mode."
+    },
+    "GUEST_MODE_ON": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "guest-mode-on",
+        "DESC": "Enable Guest Mode. See https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#guest-mode."
+    },
+    "ERASE_GUEST_DATA": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "erase-guest-data",
+        "DESC": "Erase Guest Mode user data."
     },
     "LIVE_STATUS": {
         "API": [0],

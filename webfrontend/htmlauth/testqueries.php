@@ -39,6 +39,9 @@ $tokenexpires = json_decode( base64_decode($tokenparts[1]) )->exp;
         font-weight: bold;
         color: green;
     }
+	.ui-table td {
+        vertical-align: middle;
+    }
 </style>
 
 <?php
@@ -61,7 +64,7 @@ if($tokenvalid == "false") {
 <!-- Queries -->
 <?php
 	$vehicles = tesla_summary();
-    read_vehicle_mapping($vmap, $custom_baseblecmd);
+    read_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat);
     vehicles_add_api_attribute($vehicles, $vmap);
 	if (isset($vid) && isset($vehicles->{"$vid"})) {
 		$selected_vehicle = $vehicles->{"$vid"};
@@ -176,13 +179,24 @@ if($tokenvalid == "false") {
 ?>
 				</select>
 			</td>
-			<td width="1%">&nbsp;</td>
+			<td width="1%" align=right>
+<?php
+            	if (!empty($command->BLECMD)) {   
+                	echo '<img src="./images/Bluetooth.svg" alt="BLE" height="15" ></img>';
+            	} else {
+					echo '&nbsp;';
+				}
+?>
+			</td>
 			<td>
-				<p class="hint"><?=$command->DESC;?></p>
+				<p class="hint">
+					<?=$command->DESC;?>
+				</p>
 			</td>
 		</tr>
 		<tr>
-			<td></td>
+			<td>
+			</td>
 			<td>
 <?php
 		// wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested

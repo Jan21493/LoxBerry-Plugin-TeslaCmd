@@ -42,7 +42,7 @@ if($tokenvalid == "false") {
 <!-- Queries -->
 <?php
 	$vehicles = tesla_summary();
-    read_vehicle_mapping($vmap, $custom_baseblecmd);
+    read_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat);
     vehicles_add_api_attribute($vehicles, $vmap);
 ?>
 
@@ -130,6 +130,12 @@ if($tokenvalid == "false") {
         // Get informations: TYPE is "GET" AND command is supported in selected API of vehicle (API for energy sites is always 0) AND
         // tag is matching type of vehicle (car or energy site)
 	    if (($attribute->TYPE == "GET") && in_array($vehicle->api, $attribute->API) && $tag == $attribute->TAG) {
+            $command_get = "";
+            if (isset($commands->{strtoupper($command)}->PARAM)) {
+                foreach ($commands->{strtoupper($command)}->PARAM as $param => $param_desc) {
+                    $command_get .= "&$param=<value>";
+                }
+            }
 ?>
 
 <div style="display:flex; align-items: center; justify-content: center;">
@@ -147,9 +153,18 @@ if($tokenvalid == "false") {
             id="summarylink"
             name="summarylink"
             data-mini="true"
-            value="<?=$lbzeurl."?action=".strtolower($command).$vehicle_tag; ?>"
+            value="<?=$lbzeurl."?action=".strtolower($command).$vehicle_tag.$command_get; ?>"
             readonly="readonly">
         <p style="margin:4px 0px;"><span class="hint"><?= "$attribute->DESC" ?></span></p>
+<?php
+            if(isset($attribute->PARAM)) {
+                echo '<table class="formtable" border="0">';
+    			foreach ($attribute->PARAM as $param => $param_desc) {
+                    echo '<tr><td><span class="hint"><i>'.$param.'</i>: </span></td><td><span class="hint">'.$param_desc.'</span></td></tr>';
+                }
+                echo '</table>';
+            }
+?>
     </div>
 </div>
 

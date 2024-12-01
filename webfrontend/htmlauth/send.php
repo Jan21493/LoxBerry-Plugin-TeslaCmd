@@ -43,7 +43,7 @@ if(!empty($_REQUEST["vehicle"])) {
 } elseif (!empty($_REQUEST["id"])) { 
 	$vid = $_REQUEST["id"];
 }
-read_vehicle_mapping($vmap, $custom_baseblecmd);
+read_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat);
 // owner's api is assumed and vin=vid, if no mapping was found
 $api = 0;
 // Vehicle ID was provided with command
@@ -89,7 +89,6 @@ if(isset($command)) {
 			LOGDEB("tesla_command: Parameter \"VID\" missing, but required");
 			$command_error = true;
 		}
-
 		$blecmd = $command->BLECMD;
 
 		if(isset($command->PARAM)) {																			

@@ -6,31 +6,32 @@ as a successor of the [(inofficial) Owner's API](https://tesla-api.timdorr.com/)
 
 The Tesla Vehicle Command SDK includes the [Tesla Control Utility](https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility) a command-line interface for sending commands to Tesla vehicles either via Bluetooth Low Energy (BLE) or over the Internet (OAuth token required!). Currently only BLE is implemented in this Plugins and there are no plans to include sending commands over the Internet via Tesla Fleet API.
 
-As of July 2024 only the commands to control the vehicle, e.g. change climate control, change settings for charging the car, or open or close the trunk/frunk are available via new Vehicle Command API. Currently the new API supports a single command 'body-controller-state' that retrieves basic information about closure states, sleep status, and user presence state only. Therefore the plugin supports the old commands from the (inofficial) Owner's API that are still working when the vehicle was switched to the new Vehicle Control API.
+All commands to control the vehicle, e.g. change climate control, change settings for charging the car, or open or close the trunk/frunk are available via new Vehicle Command API via BLE or Fleet API. Since autumn 2024 the new API supports two commands to retrieve status information via BLE. The first command 'body-controller-state' retrieves basic information about closure states, sleep status, and user presence state and works even when the vehicle is asleep. The second command 'state' is used to retrieve detailled status information about either software-update, drive, closures, charge-schedule, precondition-schedule, tire-pressure, charge, climate, media, media-detail, and parental-controls.
+The plugin also supports the old commands from the (inofficial) Owner's API that are still working when the vehicle was switched to the new Vehicle Control API, e.g. for pre 2021 S and Y models
+and powerwalls. For newer vehicles only some status information can be retrieved via (inofficial) Owner's API (https://owner-api.teslamotors.com/api/1/vehicles/...) . 
 
-The plugin still uses the (inofficial) Owner's API (https://owner-api.teslamotors.com/api/1/vehicles/...) to retrieve status information from the vehicle or powerwall. In the settings section you may choose either 
-- the old (inofficial) Owner's API for ALL commands if your vehicle still supports the old commands or you have an energy site
-- a mix of (inofficial) Owner's API for commands to retrieve the status of the vehicle and the new Vehicle Command API via BLE to send commands to the vehicle via Tesla Control Utility (tesla-control)
+Since version 0.5 of this plugin, the proper API is choosen automatically. 
 
 All data from the vehicle is transferred back to the Loxone Miniserver via MQTT. The subscription for this is `teslacmd/#` and is automatically registered in the Loxberry MQTT gateway plugin.
 
 > [!NOTE]
-> To use the Tesla Control Utility via BLE you may have to install the tool, set up local keys and authorize the new key by tapping your Tesla NFC card on the center console in your car. 
-See [README.md](https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility) for details.
+> This plugin uses modified utilities that were provided by Tesla. See [README.md](https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility) for details.
 
-The plugin contains binary files for the two utilities 'tesla-control' and 'tesla-keygen' for Raspberry PI 32- and 64-bit only. For all other platforms you have to follow the instructions provided by Telsa to install 'go' and compile and build the two utilities. You may choose to compile and build the two utilities on a Raspberry PI if you have security concerns or if Tesla has provided a new version of the SDK.
+The plugin contains binary files for the utilities 'tesla-control', 'tesla-keygen', and 'tesla-scan' for Raspberry PI 32- and 64-bit only. For all other platforms you have to follow the instructions provided by Telsa to install 'go' and compile and build the two utilities. You may choose to compile and build the two utilities on a Raspberry PI if you have security concerns or if Tesla has provided a new version of the SDK.
 
-Currently this plugin is in development, so it should be used in any productive environment with care. It allows you to select the API for each of your cars and a list of query commands for both API's as well as entering test quieries that show the URL for commands that use the Owner's API or the full tesla-control command for commands that use the Vehicle Command API via BLE.
+Currently this plugin is in development, so it should be used in any productive environment with care. It shows a list of all commands that are available for your vehicles and powerwalls as well as entering test queries to know more about each command and the responses.
 
-See 'Queries' and 'Test queries' tabs for description and parmeters for each command. See https://wiki.loxberry.de/plugins/teslacmd/start for informations regarding installation and integration into Loxone home automation.
+See 'Queries' and 'Test Queries' tabs for description and parmeters for each command. See https://wiki.loxberry.de/plugins/teslacmd/start for informations regarding installation and integration into Loxone home automation.
 
 ## Example queries
 ### Returns all products including vehicles, powerwalls, and energy sites
 `http://<user>:<pass>@192.168.1.1/admin/plugins/teslacmd/send.php?action=product_list`
+### Shows basic status information from a vehicle
+`http://<user>:<pass>@192.168.1.1/admin/plugins/teslacmd/send.php?action=body_controller_statep&vin=LRW31234567890123`
 ### Wake up vehicle
-`http://<user>:<pass>@192.168.1.1/admin/plugins/teslacmd/send.php?action=wake_up&vid=123456789`
+`http://<user>:<pass>@192.168.1.1/admin/plugins/teslacmd/send.php?action=wake_up&vin=LRW31234567890123`
 
-## Instructions to install tools and other stuff - this might be included in a final version of the plugin
+## Instructions to install tools and other stuff - not required for a standard installation
 
 ```
 Install vehicle command API on Raspberry (I've not tested steps 3.-5. You may have to use 'su' to switch to the root user instead of 'sudo')

@@ -43,20 +43,37 @@ if(!empty($_REQUEST["vehicle"])) {
 } elseif (!empty($_REQUEST["id"])) { 
 	$vid = $_REQUEST["id"];
 }
-read_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat);
+if(!empty($_REQUEST["vin"])) { 
+	$vin = $_REQUEST["vin"];
+} 
+//debug may be added to or removed from request, default is the command option from settings menu.
+if(!empty($_REQUEST["debug"])) { 
+	$debug = $_REQUEST["debug"];
+	LOGDEB("tesla_command: debug=$debug.");
+} 
+read_api_data($baseblecmd, $ble_repeat);
 // owner's api is assumed and vin=vid, if no mapping was found
 $api = 0;
-// Vehicle ID was provided with command
-if (isset($vid)) {
-	if (isset($vmap) && isset($vmap->{strval($vid)})) {
-		$ventry = $vmap->{strval($vid)};
-		$api = $ventry->api;
-		$vin = $ventry->vin;
+// VIN was provided 
+if (isset($vin)) {
+	$vid = $vin;
+	$api = getApiProtocol($vin);
+	LOGDEB("tesla_command: VIN: $vin was provided. ".$apinames[$api]." is used.");
+} elseif (isset($vid)) {
+	// Vehicle ID was provided 
+	$vehicles = tesla_summary();
+    foreach ($vehicles as $index => &$vehicle) {
+		// vehicle was found
+		if ($vid == $vehicle->id_s) {
+			$vin = $vehicle->vin;
+			$api = getApiProtocol($vin);
+		}
 	} 
+	LOGDEB("tesla_command: VID: $vid was provided, lookup for VIN got: $vin. ".$apinames[$api]." is used.");
 } 
 
 // wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested
-if (isset($vid) && isset($vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
+if (isset($vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
 	// Define force
 	if(!empty($_REQUEST["force"])) { 
 		$force = $_REQUEST["force"];
@@ -81,8 +98,8 @@ if(isset($command)) {
 
 	if (!empty($command->TAG)) {
 		// a command for a specific vehicle or energy site is selected
-		if(!empty($vid)) {
-			LOGDEB("tesla_command: vid: ".$vid.", vin: ".$vin.($force ? ", force: $force" : ""));
+		if(!empty($vid) || !empty($vin)) {
+			LOGDEB("tesla_command: vid: ".$vid." and/or vin: ".$vin." was provided".($force ? ", force: $force" : ""));
 		} else {
 			// error if vid is no provided, but required for the command
 			$command_output =  $command_output."Parameter \"VID\" (ID of vehicle or energy site) is missing, but required for the command.\n";
@@ -90,16 +107,19 @@ if(isset($command)) {
 			$command_error = true;
 		}
 		$blecmd = $command->BLECMD;
-
 		if(isset($command->PARAM)) {																			
 			foreach ($command->PARAM as $param => $param_desc) {
 				LOGDEB("tesla_command: Parameter \"$param\": $param_desc");
-				
-				if(isset($_REQUEST["$param"])) {
-					LOGDEB("$param: ".$_REQUEST["$param"]);
-					$command_post += array("$param" => $_REQUEST["$param"]);
-					$command_post_print = $command_post_print.", $param: ".$_REQUEST["$param"];
-					$blecmd = str_replace("{".$param."}", $_REQUEST["$param"], $blecmd);
+				$value = $_REQUEST["$param"];
+				$optional = strpos($blecmd, "[".$param."]");
+				if (!empty($value) || $optional) {
+					LOGDEB("tesla_command: $param: ".$value);
+					$command_post += array("$param" => $value);
+					$command_post_print = $command_post_print.", $param: ".$value;
+					if ($optional) 
+						$blecmd = str_replace("[".$param."]", $value, $blecmd);
+					else
+						$blecmd = str_replace("{".$param."}", $value, $blecmd);
 				} else {
 					$command_output = $command_output."Parameter \"$param\" missing! $param_desc\n";
 					LOGDEB("tesla_command: Parameter \"$param\" missing");
@@ -117,20 +137,32 @@ if(isset($command)) {
 			LOGDEB("tesla_command: VIN is missing, but required for Vehicle command API");
 			$command_error = true;
 		}
+		if (($api == 1) && !empty($blecmd) && ($command->AUTH == true) && keyCheck($vin, $baseblecmd, PRIVATE_KEY) != 0) {
+			// error if vehicle command API is selected, command requires authentication, but private key is missing
+			$command_output =  $command_output."Vehicle command API is selected and command requires authentication, but private key is missing.\n";
+			LOGDEB("tesla_command: BLE command requires authentication, but private key is missing.");
+			$command_error = true;
+		}
 
 		if (!$command_error) {
 			// select API - either owner's api or vehicle command via ble 
 			if ($api == 0 || empty($blecmd)) {
 				$command_output =  tesla_query( $vid, $action, $command_post, $force );
-				LOGOK("tesla_command: vid: $vid, action: $action".$command_post_print.($force ? ", force: $force" : ""));
+				LOGOK("tesla_command: vid: $vid, vin: $vin, action: $action".$command_post_print.($force ? ", force: $force" : ""));
 			} else {
-				if (isset($custom_baseblecmd))
-					$blebasecmd = $custom_baseblecmd;
-				else
-					$blebasecmd = $default_baseblecmd;
-				$blebasecmd = str_replace($command->TAG, "$vin", $blebasecmd);
-				$command_output = tesla_ble_query( $vid, $action, $blebasecmd, $blecmd, $force );
-				LOGOK("tesla_command: vid: $vid, action: $action, cmd: $blebasecmd $blecmd".($force ? ", force: $force" : ""));
+				$baseblecmd = str_replace($command->TAG, $vin, $baseblecmd);
+
+				// if debug option is provided, then adjust debug in command if necessary
+				if (!empty($debug)) {
+					LOGDEB("tesla_command: verify debug setting.");
+					if (strpos($baseblecmd, "-debug") && ($debug === "false")) {
+						$baseblecmd = str_replace("-debug", "", $baseblecmd);
+					} elseif (!strpos($baseblecmd, "-debug") && ($debug === "true")) {
+						$baseblecmd = str_replace("{command}", "-debug {command}", $baseblecmd);
+					}
+				}
+				$command_output = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $force );
+				LOGOK("tesla_command: vid: $vid, vin: $vin, action: $action, cmd: $baseblecmd $blecmd".($force ? ", force: $force" : ""));
 			}
 		}
 	} else {

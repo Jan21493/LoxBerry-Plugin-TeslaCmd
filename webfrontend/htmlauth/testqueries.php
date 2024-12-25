@@ -64,8 +64,7 @@ if($tokenvalid == "false") {
 <!-- Queries -->
 <?php
 	$vehicles = tesla_summary();
-    read_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat);
-    vehicles_add_api_attribute($vehicles, $vmap);
+    read_api_data($baseblecmd, $ble_repeat);
 	if (isset($vid) && isset($vehicles->{"$vid"})) {
 		$selected_vehicle = $vehicles->{"$vid"};
 	}
@@ -81,10 +80,6 @@ if($tokenvalid == "false") {
 			// $command contains the selected command
 			$command = $commands->{"$action"};
 			$uri = $command->URI;
-			if (isset($custom_baseblecmd))
-				$blebasecmd = $custom_baseblecmd;
-			else
-				$blebasecmd = $default_baseblecmd;
 			$blecmd = $command->BLECMD;
 			$send_command = true;
 		}
@@ -119,7 +114,7 @@ if($tokenvalid == "false") {
 		} else {
 			$tag = strval($vehicle->id);
 			$name = $vehicle->display_name;
-			$info = "VID: ".$tag.", VIN: ".strval($vehicle->vin).", using <span class=\"mono\">".$apinames[$vehicle->api]."</span>";
+			$info = "VID: ".$tag.", VIN: ".strval($vehicle->vin).", using <span class=\"mono\">".$apinames[getApiProtocol($vehicle->vin)]."</span>";
 		}
 ?>
 					<option value="<?=$tag;?>" <?php if($type == $tag){ echo " selected"; $selected_info = $info; $selected_vehicle = $vehicle; }?>>
@@ -166,7 +161,7 @@ if($tokenvalid == "false") {
 					$tag = "{vehicle_tag}";
 				}
 				// show command if it is matching the selected API, TAG is defined for the command and matching the vehicle / energy site
-				if (in_array($selected_vehicle->api, $attribute->API) && !empty($attribute->TAG) && ($tag == $attribute->TAG)) {
+				if (in_array(getApiProtocol($selected_vehicle->vin), $attribute->API) && !empty($attribute->TAG) && ($tag == $attribute->TAG)) {
 ?>
 					<option value="<?=$cmd;?>" <?php if($cmd == $action){ echo " selected"; $command = $attribute; } ?>>
 					<?=$cmd;?>
@@ -282,7 +277,7 @@ if($tokenvalid == "false") {
 					if (isset($selected_vehicle->vin)) {
 						// vehicle
 						$uri = str_replace($command->TAG, "$selected_vehicle->vin", $uri);
-						$blebasecmd = str_replace($command->TAG, "$selected_vehicle->vin", $blebasecmd);
+						$baseblecmd = str_replace($command->TAG, "$selected_vehicle->vin", $baseblecmd);
 					} else {
 						// energy site or vehicle, but no vin in mapping table
 						$uri = str_replace($command->TAG, "$vid", $uri);
@@ -295,17 +290,25 @@ if($tokenvalid == "false") {
 
 				if (isset($command->PARAM)) {
 					foreach ($command->PARAM as $param => $param_desc) {
-						
-						if (!empty($_REQUEST["$param"])) {
-							LOGDEB("teslaqueries: $param: ".$_REQUEST["$param"]);
-							$command_post += array("$param" => $_REQUEST["$param"]);
-							$command_post_print = $command_post_print.", $param: ".$_REQUEST["$param"];
-							$command_get = $command_get."&$param=".$_REQUEST["$param"];
-							// replace param with value for BLECMD
-							$blecmd = str_replace("{".$param."}", $_REQUEST["$param"], $blecmd);
+						$value = $_REQUEST["$param"];
+						$optional = strpos($blecmd, "[".$param."]");
+						if (!empty($value) || $optional) {
+							LOGDEB("teslaqueries: $param: ".$value);
+							$command_post += array("$param" => $value);
+							// optional parameters with empty value are skipped
+							if (!$optional || ($value != "")) {
+								$command_post_print .= ", $param: ".$value;
+								$command_get = $command_get."&$param=".$value;
+							} 
+							// replace param with value for BLECMD - params that are required are in curly brackets, params that are optional are in square brackets
+							if ($optional) {
+								$blecmd = str_replace("[".$param."]", $value, $blecmd);
+							} else {
+								$blecmd = str_replace("{".$param."}", $value, $blecmd);
+							}
 						} else {
-							$commandoutput = $commandoutput."Parameter \"$param\" missing! $param_desc\n";
-							LOGINF("Parameter \"$param\" missing");
+							$commandoutput = $commandoutput."Parameter '$param' missing! $param_desc\n";
+							LOGINF("Parameter '$param' missing");
 							$command_error = true;
 						}
 					}
@@ -313,12 +316,12 @@ if($tokenvalid == "false") {
 
 				if (!$command_error) {
 					// select API - either owner's api or vehicle command via ble 
-					if ($selected_vehicle->api == 0 || empty($blecmd)) {
+					if (getApiProtocol($selected_vehicle->vin) == OWNERS_API || empty($blecmd)) {
 						$commandoutput = tesla_query( $vid, $action, $command_post, $force );
 						LOGOK("teslaqueries: vid: $vid, action: $action ".$command_post_print.($force ? ", force: $force" : ""));
 					} else {
-						$commandoutput = tesla_ble_query( $vid, $action, $blebasecmd, $blecmd, $force );
-						LOGOK("teslaqueries: vid: $vid, action: $action, basecmd: $blebasecmd, command: $blecmd".($force ? ", force: $force" : ""));
+						$commandoutput = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $force );
+						LOGOK("teslaqueries: vid: $vid, action: $action, basecmd: $baseblecmd, command: $blecmd".($force ? ", force: $force" : ""));
 					}
 				}
 
@@ -336,15 +339,21 @@ if($tokenvalid == "false") {
 		// display URLs, command(s), and response
 		$lburi = "?action=".$action.$command_get;
 
-		if (!empty($command->TAG)) { $lburi = $lburi."&vid=$type"; }
+		if (!empty($command->TAG)) {
+			if (isset($selected_vehicle->vin)) {
+				$lburi = strtolower($lburi)."&vin=".$selected_vehicle->vin; 
+			} else {
+				$lburi = strtolower($lburi."&vid=".$type); 
+			}
+		}
 		if ($force){ $lburi = $lburi."&force=true"; }
-		if (isset($command->URI)){ echo "HTTP GET Request to TeslaConnect Plugin on Loxberry:<br><span class=\"mono\">".strtolower($lbzeurl.$lburi)."</span><br>"; }
+		if (isset($command->URI)){ echo "HTTP GET Request to TeslaConnect Plugin on Loxberry:<br><span class=\"mono\">".strtolower($lbbaseurl.$lbzeurl).$lburi."</span><br>"; }
 
 		if (isset($commandoutput)) {
 			if (!$command_error) {
-				if (in_array($selected_vehicle->api, $command->API)) {
+				if (in_array(getApiProtocol($selected_vehicle->vin), $command->API)) {
 					echo "<br>Translated by TeslaConnect Plugin on Loxberry and send using <span class=\"mono\">";
-					if ($selected_vehicle->api == 0 || empty($blecmd)) {
+					if (getApiProtocol($selected_vehicle->vin) == OWNERS_API || empty($blecmd)) {
 						if (isset($command->URI)) { 
 							echo $apinames[OWNERS_API]."</span> as TLS GET Request with Bearer-Token to:<br><span class=\"mono\">".BASEURL.$uri."</span><br>"; 
 						}
@@ -354,25 +363,33 @@ if($tokenvalid == "false") {
 					} else {
 						echo "Vehicle Command API locally via BLE</span> :<br>";
 						if ($force) {
-							$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $blebasecmd);
+							$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $baseblecmd);
 							echo "Get status: <span class=\"mono\">".$blefullcmd."</span><br>";
-							$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $blebasecmd);
+							$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $baseblecmd);
 							echo "If asleep: <span class=\"mono\">".$blefullcmd."</span><br>";
 						}
-						$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
+						$blefullcmd = str_replace("{command}", $blecmd, $baseblecmd);
 						echo "<span class=\"mono\">".$blefullcmd."</span><br>";
 					}
 				}
 ?>
-<h4>Response:</h4>
-<div class="mono">
-	<!--<p>###<?php var_dump(json_decode($commandoutput));?>###</p>-->
-	<p><?php echo pretty_print($commandoutput);?></p>
-</div>
-<b>Note:</b> Some status information that is retrieved as a string (name for a constant) is translated to a number to make it easier for the Loxone Miniserver to process the response. See enums ClosureState_E, VehicleLockState_E, and VehicleSleepStatus_E
-in <a href="https://github.com/teslamotors/vehicle-command/blob/05bc5dd8d0649b4ccb45a765b9127d06f1050a6f/pkg/protocol/protobuf/vcsec.proto" target=”_blank”>vehicle-command/pkg/protocol/protobuf/vcsec.proto</a> for the meaning of these numbers.
+	<h4>Response:</h4>
+	<div class="mono">
+		<!--<p>###<?php var_dump(json_decode($commandoutput));?>###</p>-->
+		<p><?php echo pretty_print($commandoutput);?></p>
+	</div>
+	<b>Note:</b> Status information that is coded as an enum may be retrieved either as an enum string or a number to make it easier for the Loxone Miniserver to process the response. See e.g. enums ClosureState_E, VehicleLockState_E, and VehicleSleepStatus_E
+	in <a href="https://github.com/teslamotors/vehicle-command/blob/05bc5dd8d0649b4ccb45a765b9127d06f1050a6f/pkg/protocol/protobuf/vcsec.proto#L228 for the meaning of the numbers." target=”_blank”>vehicle-command/pkg/protocol/protobuf/vcsec.proto#L228</a> for the meaning of these numbers.
 
-<hr>
+	<hr>
+	
+<?php
+			} else {
+?>
+	<h4>Error:</h4>
+	<span style="color:red;"><p><?php echo $commandoutput;?></p></span>
+
+	<hr>
 	
 <?php
 			}

@@ -64,13 +64,17 @@ echo "<INFO> Copy pre-build binary tools from Tesla Vehicle Command SDK if Linux
 if [[ "$(uname -m)" == 'aarch64' ]]; then
    cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.aarch64 /usr/local/bin/tesla-control
    cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.aarch64 /usr/local/bin/tesla-keygen
+   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-scan.aarch64 /usr/local/bin/tesla-scan
    # add rights for BLE access to binary file
    setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
+   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-scan
 elif [[ "$(uname -m)" == 'armv7l' ]]; then
    cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.armv7l /usr/local/bin/tesla-control
    cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.armv7l /usr/local/bin/tesla-keygen
+   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-scan.armv7l /usr/local/bin/tesla-scan
    # add rights for BLE access to binary file
    setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
+   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-scan
 fi
 
 # Exit with Status 0

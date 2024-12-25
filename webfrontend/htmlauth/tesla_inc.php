@@ -315,7 +315,7 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 	return "$rawdata\n";
 }
 
-function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=false )
+function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $force=false )
 {
 	// Function to send query via vehicle command API over BLE
 		
@@ -327,16 +327,16 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 	$type = $commands->{"$action"}->TYPE;
 
 	if ($force) {
-		// if command is enforced, then check wake status
-		$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $blebasecmd);
+		// if wake up for command is enforced, then check sleep status
+		$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $baseblecmd);
 		LOGDEB("tesla_ble_query: Check if vehicle is asleep: $blefullcmd");
 		$result_code = tesla_shell_exec( "$blefullcmd", $output);
 		$vehicleSleepStatus = "";
 		foreach($output as $key => $line) {
-			if (strpos($line, '"vehicleSleepStatus"') > 0 && strpos($line, '"VEHICLE_SLEEP_STATUS_ASLEEP"') > 0) {
+			if (strpos($line, '"vehicleSleepStatus":2') > 0 || strpos($line, '"vehicleSleepStatus":"VEHICLE_SLEEP_STATUS_ASLEEP"') > 0) {
 				// vehicle is sleeping
 				$vehicleSleepStatus = "sleeping";
-				$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $blebasecmd);
+				$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $baseblecmd);
 				LOGDEB("tesla_ble_query: Need to wake vehicle: $blefullcmd");
 				$result_code = tesla_shell_exec( "$blefullcmd", $output);
 				if ($result_code > 0) {
@@ -346,7 +346,7 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 					sleep(3);
 				}
 				break;
-			} else if (strpos($line, '"vehicleSleepStatus"') > 0 && strpos($line, '"VEHICLE_SLEEP_STATUS_AWAKE"') > 0) {
+			} else if (strpos($line, '"vehicleSleepStatus":1') > 0 || strpos($line, '"vehicleSleepStatus":"VEHICLE_SLEEP_STATUS_AWAKE"') > 0) {
 				// vehicle is awake
 				$vehicleSleepStatus = "awake";
 				LOGDEB("tesla_ble_query: Vehicle is awake already - no need to wake it up");
@@ -355,85 +355,55 @@ function tesla_ble_query( $vehicle_tag, $action, $blebasecmd, $blecmd, $force=fa
 		}
 		if (empty($vehicleSleepStatus)) {
 			// there is no vehicleSleepStatus in response, if BODY_CONTROLLER_STATE failed, e.g. the vehicle was away.
-			LOGINFO("tesla_ble_query: No vehicleSleepStatus in response. 'body-controller-state' has failed, e.g. due to the fact that the vehicle was away!");
+			LOGINFO("tesla_ble_query: No proper vehicleSleepStatus (either asleep or awake) in response. 'body-controller-state' may have failed, e.g. due to the fact that the vehicle was away!");
 			// but sending requested command anyway (as without force) - not sure if this should be changed to skip the command.
 		}
 	} 
 	// sending requested command
-	$blefullcmd = str_replace("{command}", $blecmd, $blebasecmd);
+	$blefullcmd = str_replace("{command}", $blecmd, $baseblecmd);
 	LOGDEB("tesla_ble_query: (type: $type) $blefullcmd");
 	$result_code = tesla_shell_exec( "$blefullcmd", $output);
 	
-	// full debugging
+	// raw output with full debugging (if enabled)
 	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
 	foreach($output as $key => $line) {
 		LOGDEB("$line");
 	}
 	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
 	
-	// remove logging output from other output
+	$jsondata = "";
+	// separate debug output from other (json) output
 	foreach($output as $key => $line) {
-		if (strpos($line, "[") > 20 && strpos($line, "]") > 25 && strpos($line, "]") < 35) {
+		if (strpos($line, "20") === 0 && strpos($line, "[") > 20 && strpos($line, "]") > 25 && strpos($line, "]") < 35) {
 			// logging output 
 			if (!empty($logdata))
 				$logdata .= ', '; 
 			$logdata .= '"'.$line.'"';
 			unset($output[$key]);
+		} else {
+			$jsondata .= $line.' ';
 		}
 	} 
 	$rawdata = '{"result_code":'.$result_code.', ';
 	$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
 	$rawdata .= '"sentAtTimeLox":'.epoch2lox().', ';
 	$rawdata .= '"sentAtTimeISO":"'.currtime().'", ';
+	// GET is used to retrieve status and other information, while POST sends actions
 	if($type == "GET") {
 		if ( $result_code == 0) {
 			$rawdata .= '"error_msg":""';
 			if ($action == "BODY_CONTROLLER_STATE") {
 				$rawdata .= ', "vehicleNearby":true';
 			}
-			// reformat list-keys as json
-			if ($action == "LIST_KEYS") {
-				foreach($output as $key => $line) {
-					$keydata = explode("\t", $line);
-					$rawdata .= ', "key'.$key.'": {"key":"'.$keydata[0].'", "role":"'.$keydata[1].'", "key_form_factor":"'.$keydata[2].'"}';
-					$keyno++;
-				}
-			} else {
-				// remove outer brackets for all other commands (currently only body-controller-state and state <catgegory>)
-				array_shift($output);
-				array_pop($output);
-				// replace state strings with numbers to make it easier for the Loxone miniserver to process the values
-				// enums are defined in https://github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec.proto
-				//	 ClosureState_E, VehicleLockState_E, VehicleSleepStatus_E, UserPresence_E 
-				$rawdata .= ', ';
-				foreach($output as $line) {
-					$line = str_replace('"CLOSURESTATE_CLOSED"', "0", $line);
-					$line = str_replace('"CLOSURESTATE_OPEN"', "1", $line);
-					$line = str_replace('"CLOSURESTATE_AJAR"', "2", $line);
-					$line = str_replace('"CLOSURESTATE_UNKNOWN"', "3", $line);
-					$line = str_replace('"CLOSURESTATE_FAILED_UNLATCH"', "4", $line);
-					$line = str_replace('"CLOSURESTATE_OPENING"', "5", $line);
-					$line = str_replace('"CLOSURESTATE_CLOSING"', "6", $line);
-					$line = str_replace('"VEHICLELOCKSTATE_UNLOCKED"', "0", $line);
-					$line = str_replace('"VEHICLELOCKSTATE_LOCKED"', "1", $line);
-					$line = str_replace('"VEHICLELOCKSTATE_INTERNAL_LOCKED"', "2", $line);
-					$line = str_replace('"VEHICLELOCKSTATE_SELECTIVE_UNLOCKED"', "3", $line);
-					$line = str_replace('"VEHICLE_SLEEP_STATUS_UNKNOWN"', "0", $line);
-					$line = str_replace('"VEHICLE_SLEEP_STATUS_AWAKE"', "1", $line);
-					$line = str_replace('"VEHICLE_SLEEP_STATUS_ASLEEP"', "2", $line);
-					$line = str_replace('"VEHICLE_USER_PRESENCE_UNKNOWN"', "0", $line);
-					$line = str_replace('"VEHICLE_USER_PRESENCE_NOT_PRESENT"', "1", $line);
-					$line = str_replace('"VEHICLE_USER_PRESENCE_PRESENT"', "2", $line);
-					$rawdata .= $line;
-				}
-			} 
+			//echo "<pre>OUTPUT:<br>";var_dump($jsondata);echo "</pre>";
+			$rawdata .= ', '.substr($jsondata, 1);
 		} else {
 			$rawdata .= '"error_msg":"'.end($output).'"';
 			if ($action == "BODY_CONTROLLER_STATE") {
 				$rawdata .= ', "vehicleNearby":false';
 			}
+			$rawdata .= ' }';
 		}
-		$rawdata .= ' }';
 		//echo "<pre>RAWDATA:<br>";var_dump($rawdata);echo "</pre>";
 		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
 	} else {
@@ -926,67 +896,190 @@ function tesla_oauth2_refresh_token($bearer_refresh_token)
     return $bearer_token;
 }
 
-function read_vehicle_mapping(&$vmap, &$custom_baseblecmd, &$ble_repeat)
+function read_api_data(&$custom_baseblecmd, &$ble_repeat)
 {
-	// Function to read ID to VIN mapping and type of API to use
-	// JSON Array with "device_id", "device_vin", "device_api"
 	// used for vehicle-command API that requires VIN. Currently only type BLE is implemented
-	LOGINF("Read ID to VIN, API mapping, and BLE command.");
+	LOGINF("read_api_data: Read API settings (custom BLE command and repeat interval).");
 	
 	if( !file_exists(APIFILE) ) {
-		
-		LOGDEB("Empty ID to VIN and API mapping.");
+		LOGDEB("read_api_data: Empty API data.");
+		$custom_baseblecmd = $default_baseblecmd;
+		$ble_repeat = 0;
 		return;
 	}
-	
-	LOGDEB("read_vehicle_mapping: read apifile.");
 	$apidata = json_decode(file_get_contents(APIFILE));
-	$vmap = $apidata->{"id-mapping"};
 	if ($apidata->{"baseblecmd"})
 		$custom_baseblecmd = $apidata->{"baseblecmd"};
 	else
 		$custom_baseblecmd = $default_baseblecmd;
 	if ($apidata->{"blerepeat"})
 		$ble_repeat = $apidata->{"blerepeat"};
-
+	else
+		$ble_repeat = 0;
 }
 
-function write_vehicle_mapping($vmap, $custom_baseblecmd, $ble_repeat)
+function write_api_data($custom_baseblecmd, $ble_repeat)
 {
-	// Function to write ID to VIN mapping and type of API to use
     // see read function for details about content
-	LOGINF("Write ID to VIN and API mapping.");
+	LOGINF("write_api_data: Write API settings.");
 	
 	$apidata = new stdClass();
-	if (isset($vmap))
-		$apidata->{"id-mapping"} = $vmap;
-		if (isset($custom_baseblecmd))
+	if (isset($custom_baseblecmd))
 		$apidata->{"baseblecmd"} = $custom_baseblecmd;
 	if (isset($ble_repeat))
 		$apidata->{"blerepeat"} = $ble_repeat;
 
 	$apidata = json_encode($apidata);	
-	LOGDEB("write_vehicle_mapping: write apifile.");
+	LOGDEB("write_api_data: write apifile.");
 	file_put_contents(APIFILE, $apidata);
 	
 	return;
 }
 
-function vehicles_add_api_attribute(&$vehicles, $vmap) {
-
-	if(isset($vehicles)) {
-		// add API attribute to each vehicle
-		foreach ($vehicles as $index => &$vehicle) {
-			$vehicle->api = 0;  // default to old owner's api
-			// only cars may use the new api, not energy sites
-			if(!isset($vehicle->energy_site_id)) {
-				// add attribute for API to each vehicle with selected API from mappings table
-				if (isset($vmap))
-					if (isset($vmap->{strval($vehicle->id)})) {
-						$ventry = $vmap->{strval($vehicle->id)};
-						$vehicle->api = $ventry->api;
-					}
-			}
+function keyCheck($vin, $baseblecmd, $keytype = PRIVATE_KEY) {
+	
+	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
+	LOGINF("keyCheck: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin and is valid.");
+	LOGDEB("Retrieving ".$keyTypeNames[$keytype]." key file name from '-keyfile' option defined in BLE command. ");
+	$pieces = explode(' ', $baseblecmd);
+	$keyfile = "";
+	foreach ($pieces as $key => $item) {
+		if ($item == "-key-file") {
+			$keyfile = $pieces[$key+1];
 		}
 	}
+	if (empty($keyfile)) {
+		LOGINF("keyCheck: No '-key-file' option in BLE command.");
+		return 3;
+	}
+	// public key needs to be in the same directory
+	if ($keytype == PUBLIC_KEY) {
+		$keyfile = str_replace("private", "public", $keyfile);
+	}
+	$keyfile = str_replace(VEHICLE_TAG, $vin, $keyfile);
+
+	LOGINF("keyCheck: Read key file '$keyfile'.");
+
+	if( !file_exists($keyfile) ) {	
+		LOGDEB("keyCheck: Key file '$keyfile' missing.");
+		return 1;
+	}
+	$keylines = [];
+	$line = strtok(file_get_contents($keyfile), "\r\n");
+	while ($line !== false) {
+    	$keylines[] = $line;
+    	$line = strtok("\r\n");
+	}
+	// very brief check of key file
+	foreach ($keylines as $key => $line) {
+		if (substr( $line, 0, 10 ) === "-----BEGIN")
+			$startOfKey = $key + 1;
+		if (substr( $line, 0, 8 ) === "-----END")
+			$endOfKey = $key;
+	}
+	if ($startOfKey > 0 && $startOfKey < $endOfKey) {
+		LOGDEB("keyCheck: Key file seems to be O.K.");
+		return 0;
+	} else {
+		LOGDEB("keyCheck: Wrong format of key file (PEM format expected: key must be after a line with '-----BEGIN ...' and before '-----END ...'.");
+		return 2;
+	}
 }
+
+function keyDelete($vin, $baseblecmd, $keytype = PRIVATE_KEY) {
+	
+	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
+	LOGINF("keyDelete: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin.");
+	LOGDEB("Reading '-keyfile' option from BLE command. ");
+	$pieces = explode(' ', $baseblecmd);
+	$keyfile = "";
+	foreach ($pieces as $key => $item) {
+		if ($item == "-key-file") {
+			$keyfile = $pieces[$key+1];
+		}
+	}
+	if (empty($keyfile)) {
+		LOGINF("keyDelete: No '-key-file' option in BLE command.");
+		return 3;
+	}
+	// public key needs to be in the same directory
+	if ($keytype == PUBLIC_KEY) {
+		$keyfile = str_replace("private", "public", $keyfile);
+	}
+	$keyfile = str_replace(VEHICLE_TAG, $vin, $keyfile);
+
+	LOGINF("keyDelete: Delete key file '$keyfile'.");
+
+	if( !file_exists($keyfile) ) {	
+		LOGDEB("keyDelete: Key file '$keyfile' missing.");
+		return 1;
+	}
+	if (file_exists($keyfile)) {
+        unlink($keyfile);
+		LOGDEB("keyDelete: Key file was deleted.");
+		return 0;
+	} else {
+		LOGDEB("keyDelete: Key file was not found.");
+		return 1;
+	}
+}
+
+function getYearFromVIN($vin) {
+
+	$year = -1;
+	if (strlen($vin) == 17) { 
+		$yearCode = substr($vin, 9, 1);
+		if ($yearCode >= "6" && $yearCode <= "9")
+			$year = 2000 + int($yearCode);
+		if ($yearCode >= "A" && $yearCode <= "H")
+			$year = 1945 + ord($yearCode);
+		if ($yearCode >= "J" && $yearCode <= "N")
+			$year = 1944 + ord($yearCode);
+		if ($yearCode >= "P" && $yearCode <= "S")
+			$year = 1943 + ord($yearCode);
+	}
+	return $year;
+}
+
+function getModelFromVIN($vin) {
+
+	$model = "Unknown";
+	if (strlen($vin) == 17) {
+		$modelCode = substr($vin, 3, 1);
+		switch ($modelCode) {
+			case "R":
+				$model = "Roadster";
+				break;
+			case "T":
+				$model = "Semi";
+				break;
+			case "C":
+				$model = "Cybertruck";
+				break;
+			default:
+				$model = "Model ".$modelCode;
+		}
+	}
+	return $model;
+}
+
+function getApiProtocol($vin) {
+
+	if (strlen($vin) == 17) {
+		$modelCode = substr($vin, 3, 1);
+		if ( (($modelCode == "Y") || ($modelCode == "S")) && (getYearFromVIN($vin) < 2021) )
+			return 0;
+		return 1;
+	}
+	return 0;
+}
+
+function isVIN($vin) {
+
+	if (strlen($vin) == 17) {
+		return 1;
+	}
+	return 0;
+}
+
+?>

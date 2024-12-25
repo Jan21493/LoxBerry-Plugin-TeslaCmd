@@ -49,9 +49,9 @@
         "TYPE": "GET",
         "TAG": "{vehicle_tag}",
         "URI": "",
-        "AUTH": true,
+        "AUTH": false,
         "BLECMD": "list-keys",
-        "DESC": "List public keys enrolled on vehicle."
+        "DESC": "List public keys enrolled on vehicle. Works even when the vehicle is asleep. NO private key authentication is required."
     },
     "CHARGE_STATE": {
         "API": [0, 1],
@@ -130,9 +130,12 @@
         "TYPE": "GET",
         "TAG": "{vehicle_tag}",
         "URI": "",
-        "AUTH": true,
-        "BLECMD": "body-controller-state",
-        "DESC": "Fetch limited vehicle state information. Works over BLE even when infotainment / vehicle is asleep."
+        "AUTH": false,
+        "BLECMD": "body-controller-state [output]",
+        "DESC": "Fetch limited vehicle state information. Works over BLE even when infotainment / vehicle is asleep. NO private key authentication is required.",
+        "PARAM": {
+            "output": "The desired output format, either 'enums' or 'numbers'; defaults to 'numbers' if omitted."
+        }
     },
     "STATE": {
         "API": [1],
@@ -140,10 +143,11 @@
         "TAG": "{vehicle_tag}",
         "URI": "",
         "AUTH": true,
-        "BLECMD": "state {category}",
+        "BLECMD": "state {category} [output]",
         "DESC": "Fetch vehicle state over BLE.",
         "PARAM": {
-            "category": "One of 'tire-pressure', 'parental-controls', 'closures', 'charge-schedule', 'drive', 'precondition-schedule', 'media', 'media-detail', 'software-update', 'charge', or 'climate'."
+            "category": "One of 'tire-pressure', 'parental-controls', 'closures', 'charge-schedule', 'drive', 'precondition-schedule', 'media', 'media-detail', 'software-update', 'charge', or 'climate'.",
+            "output": "The desired output format, either 'enums' or 'numbers'; defaults to enums."
         }
     },
     "WAKE_UP": {
@@ -344,11 +348,11 @@
         "TAG": "{vehicle_tag}",
         "URI": "",
         "AUTH": true,
-        "BLECMD": "auto-seat-and-climate {positions} {state}",
+        "BLECMD": "auto-seat-and-climate {positions} [state]",
         "DESC": "Turn on automatic seat heating and climate control (HVAC).",
         "PARAM": {
             "positions": "The desired seat: 'L' (left), 'R' (right), or 'LR'.",
-            "state": "The desired state: 'on' or 'off'"
+            "state": "The desired state: 'on' or 'off'. Defaults to 'on' if omitted."
         }
     },
     "SET_TEMPS": {
@@ -574,15 +578,15 @@
         "TAG": "{vehicle_tag}",
         "URI": "",
         "AUTH": true,
-        "BLECMD": "charging-schedule-add {days} {time} {latitude} {longitude} {repeat} {id} {enabled}",
+        "BLECMD": "charging-schedule-add {days} {time} {latitude} {longitude} [repeat] [id] [enabled]",
         "DESC": "Schedule charge for DAYS START_TIME-END_TIME at LATITUDE LONGITUDE for [ID].",
         "PARAM": {
             "days": "Comma-separated list of any of Sun, Mon, Tues, Wed, Thurs, Fri, Sat OR all OR weekdays.",
             "time": "Time interval to charge (24-hour clock). Examples: '22:00-6:00', '-6:00', '20:32-'. The END_TIME may be on the following day.",
             "latitude": "Latitude of charging site.",
             "longitude": "Longitude of charging site.",
-            "repeat": "Set to 'once' or omit to repeat weekly.",
-            "id": "The ID of the charge schedule to modify. Not required for new schedules.",
+            "repeat": "Set to 'once' or 'weekly'. Omit to repeat weekly if this is the last parameter to enter.",
+            "id": "The ID of the charge schedule to modify. Always set to current (Linux) time. Enter a dummy value, e.g. 1 if this is not the last parameter.",
             "enabled": "Whether the charge schedule is enabled. Expects 'true' or 'false'. Defaults to 'true' if omitted."
         }    
     },
@@ -592,7 +596,7 @@
         "TAG": "{vehicle_tag}",
         "URI": "",
         "AUTH": true,
-        "BLECMD": "charging-schedule-remove {type} {id}",
+        "BLECMD": "charging-schedule-remove {type} [id]",
         "DESC": "Removes charging schedule of TYPE [ID].",
         "PARAM": {
             "type": "Either 'home', 'work', 'other', or 'id'.",
@@ -605,15 +609,15 @@
         "TAG": "{vehicle_tag}",
         "URI": "",
         "AUTH": true,
-        "BLECMD": "precondition-schedule-add {days} {time} {latitude} {longitude} {repeat} {id} {enabled}",
+        "BLECMD": "precondition-schedule-add {days} {time} {latitude} {longitude} [repeat] [id] [enabled]",
         "DESC": "Schedule precondition for DAYS TIME at LATITUDE LONGITUDE.",
         "PARAM": {
             "days": "Comma-separated list of any of Sun, Mon, Tues, Wed, Thurs, Fri, Sat OR all OR weekdays.",
             "time": "Time to precondition by. Example: '22:00'.",
             "latitude": "Latitude of location to precondition at.",
             "longitude": "Longitude of location to precondition at.",
-            "repeat": "Set to 'once' or omit to repeat weekly.",
-            "id": "The ID of the precondition schedule to modify. Not required for new schedules.",
+            "repeat": "Set to 'once' or 'weekly'. Omit to repeat weekly if this is the last parameter to enter.",
+            "id": "The ID of the precondition schedule to modify. Always set to current (Linux) time. Enter a dummy value, e.g. 1 if this is not the last parameter.",
             "enabled": "Whether the precondition schedule is enabled. Expects 'true' or 'false'. Defaults to 'true' if omitted."
         }    
     },
@@ -792,6 +796,34 @@
         "AUTH": true,
         "BLECMD": "erase-guest-data",
         "DESC": "Erase Guest Mode user data."
+    },
+    "ADD_KEY": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": true,
+        "BLECMD": "add-key {public_key} {role} {form_factor}",
+        "DESC": "Add PUBLIC_KEY to vehicle whitelist with ROLE and FORM_FACTOR.",
+        "PARAM": {
+            "public_key": "File containing public key (or corresponding private key).",
+			"role": "One of: 'owner', 'driver', 'fm' (fleet manager), 'vehicle_monitor', or 'charging_manager'.",
+			"form_factor": "One of: 'nfc_card', 'ios_device', 'android_device', or 'cloud_key'."
+        }
+    },
+    "ADD_KEY_REQUEST": {
+        "API": [1],
+        "TYPE": "POST",
+        "TAG": "{vehicle_tag}",
+        "URI": "",
+        "AUTH": false,
+        "BLECMD": "add-key-request {public_key} {role} {form_factor}",
+        "DESC": "Request NFC-card approval for a enrolling PUBLIC_KEY with ROLE and FORM_FACTOR.",
+        "PARAM": {
+            "public_key": "File containing public key (or corresponding private key).",
+			"role": "One of: 'owner', 'driver', 'fm' (fleet manager), 'vehicle_monitor', or 'charging_manager'.",
+			"form_factor": "One of: 'nfc_card', 'ios_device', 'android_device', or 'cloud_key'."
+        }
     },
     "LIVE_STATUS": {
         "API": [0],

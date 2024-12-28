@@ -936,28 +936,17 @@ function write_api_data($custom_baseblecmd, $ble_repeat)
 	return;
 }
 
-function keyCheck($vin, $baseblecmd, $keytype = PRIVATE_KEY) {
-	
+function keyCheck($vin, $keytype = PRIVATE_KEY)
+{
+	global $publicKeyWithPath, $privateKeyWithPath;
+
 	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
 	LOGINF("keyCheck: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin and is valid.");
-	LOGDEB("Retrieving ".$keyTypeNames[$keytype]." key file name from '-keyfile' option defined in BLE command. ");
-	$pieces = explode(' ', $baseblecmd);
-	$keyfile = "";
-	foreach ($pieces as $key => $item) {
-		if ($item == "-key-file") {
-			$keyfile = $pieces[$key+1];
-		}
-	}
-	if (empty($keyfile)) {
-		LOGINF("keyCheck: No '-key-file' option in BLE command.");
-		return 3;
-	}
-	// public key needs to be in the same directory
 	if ($keytype == PUBLIC_KEY) {
-		$keyfile = str_replace("private", "public", $keyfile);
+		$keyfile = str_replace(VEHICLE_TAG, $vin, $publicKeyWithPath);
+	} else {
+		$keyfile = str_replace(VEHICLE_TAG, $vin, $privateKeyWithPath);
 	}
-	$keyfile = str_replace(VEHICLE_TAG, $vin, $keyfile);
-
 	LOGINF("keyCheck: Read key file '$keyfile'.");
 
 	if( !file_exists($keyfile) ) {	
@@ -986,28 +975,66 @@ function keyCheck($vin, $baseblecmd, $keytype = PRIVATE_KEY) {
 	}
 }
 
-function keyDelete($vin, $baseblecmd, $keytype = PRIVATE_KEY) {
-	
+function getPublicKeyHex($vin, &$hexKey)
+{
+	global $publicKeyWithPath;
+
 	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
-	LOGINF("keyDelete: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin.");
-	LOGDEB("Reading '-keyfile' option from BLE command. ");
-	$pieces = explode(' ', $baseblecmd);
-	$keyfile = "";
-	foreach ($pieces as $key => $item) {
-		if ($item == "-key-file") {
-			$keyfile = $pieces[$key+1];
+	LOGINF("keyCheck: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin and is valid.");
+	$keyfile = str_replace(VEHICLE_TAG, $vin, $publicKeyWithPath);
+	LOGINF("keyCheck: Read key file '$keyfile'.");
+
+	if( !file_exists($keyfile) ) {	
+		LOGDEB("keyCheck: Key file '$keyfile' missing.");
+		return 1;
+	}
+	$keylines = [];
+	$line = strtok(file_get_contents($keyfile), "\r\n");
+	while ($line !== false) {
+    	$keylines[] = $line;
+    	$line = strtok("\r\n");
+	}
+	$startOfKey = 0;
+	$endOfKey = 0;
+	$base64Key = "";
+	// very brief check of key file
+	foreach ($keylines as $key => $line) {
+		if (substr( $line, 0, 10 ) === "-----BEGIN") {
+			$startOfKey = $key + 1;
+		} else if (substr( $line, 0, 8 ) === "-----END") {
+			$endOfKey = $key;
+		} else if ($startOfKey > 0 && $endOfKey == 0) {
+			$base64Key .= $line;
 		}
 	}
-	if (empty($keyfile)) {
-		LOGINF("keyDelete: No '-key-file' option in BLE command.");
-		return 3;
-	}
-	// public key needs to be in the same directory
-	if ($keytype == PUBLIC_KEY) {
-		$keyfile = str_replace("private", "public", $keyfile);
-	}
-	$keyfile = str_replace(VEHICLE_TAG, $vin, $keyfile);
 
+
+	if ($startOfKey > 0 && $startOfKey < $endOfKey) {
+		LOGDEB("keyCheck: Key file seems to be O.K.");
+		LOGDEB("keyCheck: base64Key: ".$base64Key);
+		$hexKey = substr(bin2hex(base64_decode($base64Key)), 52);
+		LOGDEB("keyCheck: raw public key in hex format: ".$hexKey);
+
+		return 0;
+	} else {
+		LOGDEB("keyCheck: Wrong format of key file (PEM format expected: key must be after a line with '-----BEGIN ...' and before '-----END ...'.");
+		$hexKey = "";
+		return 2;
+	}
+}
+
+function keyDelete($vin, $keytype = PRIVATE_KEY)
+{
+	global $publicKeyWithPath, $privateKeyWithPath;
+
+	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
+	LOGINF("keyDelete: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin.");
+
+	if ($keytype == PUBLIC_KEY) {
+		$keyfile = str_replace(VEHICLE_TAG, $vin, $publicKeyWithPath);
+	} else {
+		$keyfile = str_replace(VEHICLE_TAG, $vin, $privateKeyWithPath);
+	}
 	LOGINF("keyDelete: Delete key file '$keyfile'.");
 
 	if( !file_exists($keyfile) ) {	

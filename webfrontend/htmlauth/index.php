@@ -494,7 +494,7 @@ function installKeysStep1( vin ) {
     } )
 	.fail(function( vin ) {
         $("#btnInstallKeysName").html("Close");
-        $("#btnInstallKeys").attr("href", "javascript:installKeysStep2('" + vin + "');");
+        $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
 		console.log( "installKeysStep1 Fail", vin );
 	})
 	.done(function( data ) {
@@ -504,7 +504,7 @@ function installKeysStep1( vin ) {
             if(count == 0) {
                 clearInterval(timer);
                 $("#installKeysMessage").html("There is no time left to tap an NFC card anymore.");
-                $("#btnInstallKeysName").html("Close");
+                $("#btnInstallKeysName").html("Verify");
             } 
         }, 1000);
         $("#btnInstallKeys").attr("href", "javascript:installKeysStep2('" + vin + "');");
@@ -518,6 +518,40 @@ function installKeysStep1( vin ) {
 
 // Create key pair on Loxberry for vin
 function installKeysStep2( vin ) {
+    $("#btnInstallKeysName").html("Waiting...");
+    $("#installKeysMessage").html("Getting key list from car to verify if public key was installed.");
+	$.ajax( { 
+        url: "./verifykeyincar.php",
+        method: "POST",
+        data: { ajax: 'installKeysStep2', keysID: vin },
+        success: function(response) {
+            var data = $.parseJSON(response);
+            if (data.status == 200) {
+                $("#installKeysMessage").html("SUCCESS: " + data.message + "<br>You should rename the key, if not done already.");
+            }
+            else {
+                $("#installKeysMessage").html("ERROR: " + data.message);
+            }
+        }
+    } )
+	.fail(function( vin ) {
+        $("#btnInstallKeysName").html("Close");
+        $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
+		console.log( "installKeysStep2 Fail", vin );
+	})
+	.done(function( data ) {
+        $("#btnInstallKeysName").html("Close");
+        $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
+		console.log( "installKeysStep2 Success: ", vin );
+		//getconfig();
+	})
+	.always(function( vin ) {
+		console.log( "installKeysStep2 Finished" );
+	});
+}
+
+// Create key pair on Loxberry for vin
+function installKeysStep3( vin ) {
     $("#popupInstallKeys").popup("close");
 	console.log( "installKeysStep2 Success: ", vin );
     //location.replace(location.href);
@@ -597,7 +631,7 @@ function installKeysStep2( vin ) {
                     }
                 ?></td>
 				<td><?php 
-                    switch (keyCheck($vehicle->vin, $baseblecmd, PRIVATE_KEY)) {
+                    switch (keyCheck($vehicle->vin, PRIVATE_KEY)) {
                         case 0: 
                             echo "Available";
                             break;
@@ -607,21 +641,18 @@ function installKeysStep2( vin ) {
                         case 2: 
                             echo "Wrong Format";
                             break;
-                        case 3: 
-                            echo "no -key-file option";
-                            break;
                         default:
                             echo "Unknown error";
                     }
                     ?>
                 </td>
 				<td>
-                    <?php if (keyCheck($vehicle->vin, $baseblecmd, PUBLIC_KEY) == 0) { ?>
+                    <?php if (keyCheck($vehicle->vin, PUBLIC_KEY) == 0) { ?>
                         <a href="javascript:askInstallKeys('<?php echo $vehicle->vin; ?>')" class="bluebutton pi pi-car ui-link" \
                             data-intkeysid="<?php echo $vehicle->vin; ?>" title="Install public key in car."\
                             id="btnkeyscreate+<?php echo $vehicle->vin; ?>" name="btnkeyscreate+<?php echo $vehicle->vin; ?>"></a>
                     <?php } ?>
-                    <?php if (keyCheck($vehicle->vin, $baseblecmd, PRIVATE_KEY) == 0) { ?>
+                    <?php if (keyCheck($vehicle->vin, PRIVATE_KEY) == 0) { ?>
                         <a href="javascript:askDeleteKeys('<?php echo $vehicle->vin; ?>')" class="redbutton pi pi-trash ui-link" \
                             data-intkeysid="<?php echo $vehicle->vin; ?>" title="Delete key pair after confirmation."\
                             id="btnkeysdelete+<?php echo $vehicle->vin; ?>" name="btnkeysdelete+<?php echo $vehicle->vin; ?>"></a>

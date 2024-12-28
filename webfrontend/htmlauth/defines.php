@@ -23,23 +23,30 @@ const OWNERS_API = 0;
 const BLE_PLUS_OWNERS_API = 1;
 //$default_baseblecmd = $lbpbindir."/tesla-control -ble -vin {vehicle_tag} -key-name {vehicle_tag} {command}";
 //$default_baseblecmd = "tesla-control -ble -vin {vehicle_tag} -key-name {vehicle_tag} {command}";
-$default_baseblecmd = "tesla-control -ble -vin ".VEHICLE_TAG." -key-file ".KEYPAIRPATH."/".VEHICLE_TAG.PRIVATEKEYSUFFIX." {command}";
+$privateKeyWithPath = KEYPAIRPATH."/".VEHICLE_TAG.PRIVATEKEYSUFFIX;
+$publicKeyWithPath = KEYPAIRPATH."/".VEHICLE_TAG.PUBLICKEYSUFFIX;
+$default_baseblecmd = "tesla-control -ble -vin ".VEHICLE_TAG." -key-file ".$privateKeyWithPath." {command}";
 
 // command to generate a key pair
-$keygencmd = "tesla-keygen -f -key-file ".KEYPAIRPATH."/".VEHICLE_TAG.PRIVATEKEYSUFFIX." create > ".KEYPAIRPATH."/".VEHICLE_TAG.PUBLICKEYSUFFIX;
+$keygencmd = "tesla-keygen -f -key-file ".$privateKeyWithPath." create > ".$publicKeyWithPath;
 
 // parameters to send keys to car (add-key-request {public_key} {role} {form_factor})
-$sendkeyscmd = "add-key-request ".KEYPAIRPATH."/".VEHICLE_TAG.PUBLICKEYSUFFIX." owner cloud_key";
+$sendkeyscmd = "add-key-request ".$publicKeyWithPath." owner cloud_key";
 
+// verify keys in car (list-keys)
+$verifykeyscmd = "list-keys";
+
+const UNKNOWN_KEY = 0;
 const PUBLIC_KEY = 1;
 const PRIVATE_KEY = 2;
 
 $keyTypeNames = array();
+$keyTypeNames[UNKNOWN_KEY] = "unknown key";
 $keyTypeNames[PUBLIC_KEY] = "public key";
 $keyTypeNames[PRIVATE_KEY] = "private key";
 
 $apinames = array();
-$apinames[PUBLIC_KEY] = "(inofficial) Owner's API";
+$apinames[OWNERS_API] = "(inofficial) Owner's API";
 $apinames[BLE_PLUS_OWNERS_API] = "Owner's plus Vehicle Command API via BLE";
 
 // The Navigation Bar

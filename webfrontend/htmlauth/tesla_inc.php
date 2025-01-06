@@ -315,7 +315,7 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 	return "$rawdata\n";
 }
 
-function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $force=false )
+function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_repeat, $force=false )
 {
 	// Function to send query via vehicle command API over BLE
 		
@@ -330,7 +330,7 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $force=fa
 		// if wake up for command is enforced, then check sleep status
 		$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $baseblecmd);
 		LOGDEB("tesla_ble_query: Check if vehicle is asleep: $blefullcmd");
-		$result_code = tesla_shell_exec( "$blefullcmd", $output);
+		$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
 		$vehicleSleepStatus = "";
 		foreach($output as $key => $line) {
 			if (strpos($line, '"vehicleSleepStatus":2') > 0 || strpos($line, '"vehicleSleepStatus":"VEHICLE_SLEEP_STATUS_ASLEEP"') > 0) {
@@ -338,7 +338,7 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $force=fa
 				$vehicleSleepStatus = "sleeping";
 				$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $baseblecmd);
 				LOGDEB("tesla_ble_query: Need to wake vehicle: $blefullcmd");
-				$result_code = tesla_shell_exec( "$blefullcmd", $output);
+				$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
 				if ($result_code > 0) {
 					LOGDEB("tesla_ble_query: Wakeup failed: result_code= $result_code");
 				} else {
@@ -362,7 +362,7 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $force=fa
 	// sending requested command
 	$blefullcmd = str_replace("{command}", $blecmd, $baseblecmd);
 	LOGDEB("tesla_ble_query: (type: $type) $blefullcmd");
-	$result_code = tesla_shell_exec( "$blefullcmd", $output);
+	$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
 	
 	// raw output with full debugging (if enabled)
 	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
@@ -659,8 +659,15 @@ function tesla_curl_send( $url, $payload, $post=false )
 	return $response;
 }
 
-function tesla_shell_exec( $command, &$output)
+function makeDir($path)
 {
+     return is_dir($path) || mkdir($path);
+}
+
+function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
+{
+	$lockfile = "";
+
 	// Function to execute shell command
 	//[ ] If Timeout, restart apache server: sudo systemctl restart apache2
 	
@@ -672,45 +679,114 @@ function tesla_shell_exec( $command, &$output)
 		return NULL;
 	}
 
+	if ($exclusive) {
+		// simple queuing system, because only one utiliy that use BLE can be run at a time!
+		// set temp directory to user loxberry UID, e.g. 1001
+		$tmpdir = "/run/user/".getmyuid().'/tesla';
+		if (makeDir($tmpdir)) {
+			// create a file with current time stamp - it's unlikely that two files will have the same name
+			$timestamp =  hrtime(true);
+			$lockfile = $tmpdir.'/'.$timestamp;
+			touch($lockfile);
+			LOGDEB("tesla_shell_exec: created lock file: $lockfile.");
+			// grant 15 seconds (multiplied with repeat counter +1) for the first process in list finish, that means to delete the file lock
+			$lockSeconds = 15 * (intval($repeat)+1);
+			LOGDEB("tesla_shell_exec: lock for: $lockSeconds seconds.");
+			$waitSeconds = 0;
+			$fileList = scandir($tmpdir);
+			foreach ($fileList as $key => $fileEntry) {
+				LOGDEB("tesla_shell_exec: file list entry no: $key, entry: $fileEntry");
+			}
+			// . and .. are the first two entries, starting from 0, so 2 is the first real entry in list
+			if (count($fileList) > 2) {
+				$firstFile = $fileList[2];
+				LOGDEB("tesla_shell_exec: first entry: $firstFile");
+				LOGDEB("tesla_shell_exec: queue length: ".(count($fileList)-2).", position: ".(array_search($timestamp, $fileList)-1));
+				// maximal waiting time is 15s * 2 exec times = 30s
+				if ($firstFile == $timestamp) {
+					LOGDEB("tesla_shell_exec: queue is empty - very good.");
+				}
+				while ($firstFile != $timestamp && $waitSeconds < 300) {
+					sleep(1);
+					$lockSeconds--;
+					$waitSeconds++;
+					$fileList = scandir($tmpdir);
+					if (count($fileList) > 2) {
+						if ($firstFile != $fileList[2]) {
+							// firstFile has changed, so reset lock seconds
+							LOGDEB("tesla_shell_exec: first entry has changed to: ".$fileList[2]);
+							foreach ($fileList as $key => $fileEntry) {
+								LOGDEB("tesla_shell_exec: file list entry no: $key, entry: $fileEntry");
+							}
+							$lockSeconds = 15 * (intval($repeat)+1);
+							$firstFile = $fileList[2];
+							LOGDEB("tesla_shell_exec: queue length: ".(count($fileList)-2).", position: ".(array_search($timestamp, $fileList)-1).", waiting: ".$waitSeconds." seconds.");
+						}
+					} else {
+						LOGERR("tesla_shell_exec: ERROR - file list has no entries except . and ..");
+						$firstFile = $timestamp;
+					}
+
+					// no other process has deleted the file so far, so do it now.
+					if ($lockSeconds == 0 && $firstFile != $timestamp) {
+						unlink($tmpdir.'/'.$firstFile);
+					}
+				}
+				LOGDEB("tesla_shell_exec: waiting for other BLE commands to finish for $waitSeconds seconds.");
+			} else {
+				LOGERR("tesla_shell_exec: file list has no entries except . and ..");	
+			}
+		} else {
+			LOGERR("tesla_shell_exec: can't create ".$tmpdir." and it does not exist. Try it without exclusive access!");
+		}
+	}
+	$eta=-hrtime(true);
 	$output=NULL;
 	$result_code=NULL;
 	exec($command, $output, $result_code);
+	$eta+=hrtime(true);
+	LOGDEB("tesla_shell_exec: execution time for command: ".($eta/1e+6)." milliseconds.");
 
-	//Did an error occur? If so, repeat the command one time (one retry only)
+	//Did an error occur? If so, repeat the command
 	if ($result_code > 0) {
 		// On an Orange PI zero 3 with DietPi v9.7.1 (Bookworm, released July 2024) the command returned errors after typically 1-2 hours
 		// so this 'dirty' fix was added that restarts the bluetooth service. There might be an error in the bluetooth driver that I can't fix.
 		exec("cat /sys/firmware/devicetree/base/model", $output2, $result_code2);
 		$model = $output2[0];
-		if (($result_code2 == 0) && ($model=="OrangePi Zero3")){
+		if (($result_code2 == 0) && ($model=="OrangePi Zero3")) {
+			// restart bluetooth service on Orange PI Zero 3 - does not really work great
+			// and repeat the command (one time - fixed)
 			LOGINF("tesla_shell_exec: result code " . $result_code);
 			LOGDEB("tesla_shell_exec: '$model' detected!");
 			LOGDEB("tesla_shell_exec: restarting aw859a-bluetooth.service!");
 			exec("sudo systemctl restart aw859a-bluetooth.service", $output2, $result_code2);
 			sleep(5);
-			LOGDEB("tesla_shell_exec: repeating command after waiting 5 seconds ...");
-			exec($command, $output, $result_code);
+		}
+		// repeat command depending on repeat setting
+		if ($repeat == "0") {
+			LOGDEB("tesla_shell_exec: '$model' detected! Last command is not repeated.");
 		} else {
-			if (ble_repeat == "rep0") {
-				LOGDEB("tesla_shell_exec: '$model' detected! Last command is not repeated.");
-			} else {
-				LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated after waiting 5 seconds ...");				
+			LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated after waiting 5 seconds ...");				
+			sleep(5);
+			exec($command, $output, $result_code);
+			if (($repeat == "2") && ($result_code != 0)) {
+				LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated again after waiting 5 seconds ...");				
 				sleep(5);
 				exec($command, $output, $result_code);
-				if ((ble_repeat == "rep2") && ($result_code != 0)) {
-					LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated again after waiting 5 seconds ...");				
-					sleep(5);
-					exec($command, $output, $result_code);
-				}
-			} 
-			// additional detections and restart of service may be added for specific platforms if required
-		}
+			}
+		} 
+		// additional detections and restart of service may be added for specific platforms if required
 	}
 	//Did an error occur? If so, dump it out.
 	if(is_null($result_code != 0)){
 		LOGERR("tesla_shell_exec: result code " . $result_code);
 	}
-	
+	// remove file lock
+	if ($exclusive) {
+		unlink($lockfile);
+		LOGDEB("tesla_shell_exec: removed lock file: $lockfile");
+	}
+
 	LOGDEB("tesla_shell_exec: exec finished");
 	// Debugging
 	LOGDEB("tesla_shell_exec: result code: " . $result_code);

@@ -23,7 +23,7 @@ if(!empty($_REQUEST["keysID"])) {
 
 LOGINF("createkeys: Creating a public private key pair for VIN: $vin.");
 $keygencmd = str_replace(VEHICLE_TAG, $vin, $keygencmd);
-$result_code = tesla_shell_exec( $keygencmd, $output);
+$result_code = tesla_shell_exec( $keygencmd, $output, 0, false);
 	
 // raw output with full debugging (if enabled)
 LOGDEB("createkeys: -------------------------------------------------------------------------------------");

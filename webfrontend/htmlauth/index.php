@@ -71,6 +71,17 @@ $tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
 
 </style>
 
+<!-- Popup: get State via BLE -->
+<div data-role="popup" id="popupGetState" data-dismissible="true" style="max-width:400px;">
+    <div style="padding: 20px 20px; text-align: left;">
+        <h3 class="ui-title">Get state and RSSI</h3>
+        <p>Get state information and RSSI via BLE for the car with VIN <b><span id="popupGetStateID"></span></b>
+        Please wait ...</p>
+        <a href="#" id="btngetstate" class="ui-btn ui-corner-all ui-shadow ui-btn-icon-left ui-icon-alert" data-transition="flow">Stop</a>
+    </div>
+</div>
+
+
 <!-- Popup: Delete Keys -->
 <div data-role="popup" id="popupDeleteKeys" data-dismissible="true" style="max-width:500px;">
     <div style="padding: 20px 20px; text-align: left;">
@@ -115,7 +126,7 @@ $tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
         <p><b>NOTE:</b> The public key in your car is used to verify signed messages and important to be able to send control commands that require authentication via BLE to your car.</p>
         <p>1. Click on the <b>Start</b> button to start the process. </p>
         <p style="color:red"><b>IMPORTANT:</b> The car needs to be awake when the process is started!</p>
-        <p>2. When a 'Done' message is displayed here, you have only 30 seconds to finish step 3. </p>
+        <p>2. When a 'Tap NFC card!' message is displayed here, you have 30 seconds only to finish step 3. </p>
         <p>3. Tap one of your two NFC key cards on the card reader located between the cup holder and the arm rest to authorize this process. 
            There is NO message on the touchscreen displayed for this process until the step 3. was done.</p>
             <div style="text-align: center;"> 
@@ -124,9 +135,10 @@ $tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
         <p>4. If there was no error in step 3. you should see a popup message on the touchscreen requesting a new phone key pairing. The message needs to be confirmed.
             Technically the message is not correct, because it's not a 'phone' key, but a BLE key. When complete, the key list contains a new key and you should see a 
             message on your Tesla app that a new key has been added to your car.</p>
+        <p>5. When you see a 'Verify' button here, the key list is retrieved from the car and verified if the public key was found in the list.</p>
         <p><b>NOTE:</b> It is recommended to rename the key to be able to distinguish your keys. Touch <b>Controls > Locks</b> on the touchscreen of your car.
               In the key list, find the right key that you would like to rename  and touch its associated pen icon. Use the swipe gesture to scroll down the list.</p>
-        <p>To revoke this key from your car, do the same as described in the note to rename the key and touch its associated trash icon in the last step.</p>
+        <p>If you like to revoke this key from your car at a later time, do the same as described in the note to rename the key and touch its associated trash icon in the last step.</p>
         <a href="#" id="btnInstallKeys" class="ui-btn ui-corner-all ui-shadow ui-btn-icon-left ui-icon-tag" data-transition="flow"><span id="btnInstallKeysName"></span></a>
         <div style="text-align: center; width:100%">
             <h4 class="ui-title"><span id="installKeysMessage"></span></h4>
@@ -410,6 +422,65 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
 <br>
 
 <script>
+
+// Get state from care via BLE popup (Question)
+function getState( vin ) {
+	$("#popupGetStateID").html(vin);
+	$("#btngetstate").attr("href", "javascript:getStateStop('" + vin + "');");
+	$("#popupGetState").popup("open");
+    $.ajax( { 
+        url: "./getstate.php",
+        method: "POST",
+        data: { ajax: 'getstate', keysID: vin },
+        success: function(response) {
+            var data = $.parseJSON(response);
+            if (data.status == 200) {
+                element = "#txt-"+data.vin+"-sleepStatus";
+                console.log( "getstate .success", element )
+                $(element).html(data.sleepStatus);
+                element = "#txt-"+data.vin+"-rssi";
+                $(element).html(data.rssi);
+                if (data.rssi == 0) {
+                    $(element).html("<div><span style=\"color:red\">not available!</span></div>");
+                } else if (data.rssi > -50) {
+                    $(element).html("<div>"+data.rssi+"&nbsp;<span style=\"color:darkgreen\">(very strong)</span></div>");
+                } else if (data.rssi > -67) {
+                    $(element).html("<div>"+data.rssi+"&nbsp;<span style=\"color:green\">(strong)</span></div>");
+                } else if (data.rssi > -80) {
+                    $(element).html("<div>"+data.rssi+"&nbsp;<span style=\"color:gold\">(medium)</span></div>");
+                } else if (data.rssi > -90) {
+                    $(element).html("<div>"+data.rssi+"&nbsp;<span style=\"color:orange\">(weak)</span></div>");
+                } else {
+                    $(element).html("<div>"+data.rssi+"&nbsp;<span style=\"color:red\">(very weak)</span></div>");
+                }
+            }
+            console.log( "getstate .success end" )
+        }
+	} )
+	.fail(function( data ) {
+        element = "#txt-"+vin+"-sleepStatus";
+        $(element).html('unavailable');
+        element = "#txt-"+vin+"-rssi";
+        console.log( "getstate .fail", data.responseText )
+		console.log( "getstate .fail", vin );
+	})
+	.done(function( data ) {
+		console.log( "getstate .done: ", vin );
+        //location.replace(location.href);
+	})
+	.always(function( data ) {
+        console.log( "getstate .always" );
+		$("#popupGetState").popup("close");
+		console.log( "getstate Finished" );
+	});
+}
+
+// Delete key pair
+function getStateStop( vin ) {
+    $("#popupGetState").popup("close");
+    console.log( "getState Stopped" );
+}
+
 // Delete key pair popup (Question)
 function askDeleteKeys( vin ) {
 	$("#popupDeleteKeysID").html(vin);
@@ -430,7 +501,6 @@ function deleteKeys( vin ) {
 	.done(function( data ) {
 		console.log( "deletekeys Success: ", vin );
         location.replace(location.href);
-		//getconfig();
 	})
 	.always(function( vin ) {
 		$("#popupDeleteKeys").popup("close");
@@ -458,7 +528,6 @@ function createKeys( vin ) {
 	.done(function( data ) {
 		console.log( "createkeys Success: ", vin );
         location.replace(location.href);
-		//getconfig();
 	})
 	.always(function( vin ) {
 		$("#popupCreateKeys").popup("close");
@@ -509,7 +578,6 @@ function installKeysStep1( vin ) {
         }, 1000);
         $("#btnInstallKeys").attr("href", "javascript:installKeysStep2('" + vin + "');");
 		console.log( "installKeysStep1 Success: ", vin );
-		//getconfig();
 	})
 	.always(function( vin ) {
 		console.log( "installKeysStep1 Finished" );
@@ -543,7 +611,6 @@ function installKeysStep2( vin ) {
         $("#btnInstallKeysName").html("Close");
         $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
 		console.log( "installKeysStep2 Success: ", vin );
-		//getconfig();
 	})
 	.always(function( vin ) {
 		console.log( "installKeysStep2 Finished" );
@@ -590,46 +657,21 @@ function installKeysStep3( vin ) {
 	foreach ($vehicles as $index => &$vehicle) {
         // only cars are shown, no energy sites
 		if (!isset($vehicle->energy_site_id) && getApiProtocol($vehicle->vin)) {
-            $blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $baseblecmd);
-            $blefullcmd = str_replace(VEHICLE_TAG, $vehicle->vin, $blefullcmd);
-            $blefullcmd = str_replace("-debug", "", $blefullcmd);
-            LOGDEB("index.php: Check if vehicle is asleep: $blefullcmd");
-            $result_code = tesla_shell_exec($blefullcmd, $output);
-            $vehicleSleepStatus = "";
-            foreach($output as $key => $line) {
-                // check if vehicle is asleep
-                if (strpos($line, '"vehicleSleepStatus":2') > 0) {
-                    $vehicleSleepStatus = "asleep";
-                } else if (strpos($line, '"vehicleSleepStatus":1') > 0) {
-                    $vehicleSleepStatus = "awake";
-                } 
-                $col = strpos($line, '"rssi":');
-                if ($col > 0) {
-                    $rssi = substr($line,$col+7,strpos($line, ',', $col+7)-$col-7);
-                }
-            }
-            if (empty($vehicleSleepStatus)) {
-                $vehicleSleepStatus = "unknown";
-            } 
+            $rssi = null;
 ?>
 			<tr>
                 <td><?php echo $vehicle->id; ?></td>
 				<td><?php echo $vehicle->vin; ?></td>
 				<td><?php echo $vehicle->display_name; ?></td>
-				<td><?php echo $vehicleSleepStatus; ?></td>
-                <td><?php 
-                    if ($rssi > -50) {
-                        echo "<div>".$rssi."&nbsp;<span style=\"color:darkgreen\">(very strong)</span></div>";
-                    } else if ($rssi > -67) {
-                        echo "<div>".$rssi."&nbsp;<span style=\"color:green\">(strong)</span></div>";
-                    } else if ($rssi > -80) {
-                        echo "<div>".$rssi."&nbsp;<span style=\"color:gold\">(medium)</span></div>";
-                    } else if ($rssi > -90) {
-                        echo "<div>".$rssi."&nbsp;<span style=\"color:orange\">(weak)</span></div>";
-                    } else {
-                        echo "<div>".$rssi."&nbsp;<span style=\"color:red\">(very weak)</span></div>";
-                    }
-                ?></td>
+				<td>
+                    <a href="javascript:getState('<?php echo $vehicle->vin; ?>')" class="bluebutton pi pi-question-circle ui-link" \
+                            data-intkeysid="<?php echo $vehicle->vin; ?>" title="Get state from vehicle via BLE."\
+                            id="btngetstate+<?php echo $vehicle->vin; ?>" name="btngetstate+<?php echo $vehicle->vin; ?>"></a>
+                    <span id="txt-<?php echo $vehicle->vin; ?>-sleepStatus"></span>
+                </td>
+                <td>
+                    <span id="txt-<?php echo $vehicle->vin; ?>-rssi">-</span>
+                </td>
 				<td><?php 
                     switch (keyCheck($vehicle->vin, PRIVATE_KEY)) {
                         case 0: 

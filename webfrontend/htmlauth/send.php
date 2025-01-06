@@ -161,7 +161,7 @@ if(isset($command)) {
 						$baseblecmd = str_replace("{command}", "-debug {command}", $baseblecmd);
 					}
 				}
-				$command_output = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $force );
+				$command_output = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $ble_repeat, $force );
 				LOGOK("tesla_command: vid: $vid, vin: $vin, action: $action, cmd: $baseblecmd $blecmd".($force ? ", force: $force" : ""));
 			}
 		}

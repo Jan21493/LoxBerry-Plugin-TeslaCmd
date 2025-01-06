@@ -16,11 +16,9 @@ foreach ($argv as $arg) {
     else    
         $_REQUEST[$e[0]]=0;
 }
-
 if(!empty($_REQUEST["keysID"])) { 
 	$vin = $_REQUEST["keysID"];
 } 
-
 read_api_data($baseblecmd, $ble_repeat);
 LOGINF("sendkeytocar: Sending public key to car with VIN: $vin.");
 
@@ -28,7 +26,7 @@ $baseblecmd = str_replace(VEHICLE_TAG, $vin, $baseblecmd);
 $sendkeyscmd = str_replace(VEHICLE_TAG, $vin, $sendkeyscmd);
 $blefullcmd = str_replace("{command}", $sendkeyscmd, $baseblecmd);
 
-$result_code = tesla_shell_exec( "$blefullcmd", $output);
+$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
 // raw output with full debugging (if enabled)
 LOGDEB("sendkeytocar: -------------------------------------------------------------------------------------");
 foreach($output as $key => $line) {

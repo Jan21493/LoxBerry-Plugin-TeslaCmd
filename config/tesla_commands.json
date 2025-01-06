@@ -146,7 +146,7 @@
         "BLECMD": "state {category} [output]",
         "DESC": "Fetch vehicle state over BLE.",
         "PARAM": {
-            "category": "One of 'tire-pressure', 'parental-controls', 'closures', 'charge-schedule', 'drive', 'precondition-schedule', 'media', 'media-detail', 'software-update', 'charge', or 'climate'.",
+            "category": "One of 'tire-pressure', 'parental-controls', 'closures', 'charge-schedule', 'drive', 'location', 'precondition-schedule', 'media', 'media-detail', 'software-update', 'charge', or 'climate'.",
             "output": "The desired output format, either 'enums' or 'numbers'; defaults to enums."
         }
     },

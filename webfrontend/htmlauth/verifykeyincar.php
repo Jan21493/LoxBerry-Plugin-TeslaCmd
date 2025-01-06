@@ -28,7 +28,7 @@ $baseblecmd = str_replace(VEHICLE_TAG, $vin, $baseblecmd);
 $verifykeyscmd = str_replace(VEHICLE_TAG, $vin, $verifykeyscmd);
 $blefullcmd = str_replace("{command}", $verifykeyscmd, $baseblecmd);
 
-$result_code = tesla_shell_exec( "$blefullcmd", $output);
+$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
 // raw output with full debugging (if enabled)
 LOGDEB("verifykeyincar: -------------------------------------------------------------------------------------");
 foreach($output as $key => $line) {

@@ -320,7 +320,7 @@ if($tokenvalid == "false") {
 						$commandoutput = tesla_query( $vid, $action, $command_post, $force );
 						LOGOK("teslaqueries: vid: $vid, action: $action ".$command_post_print.($force ? ", force: $force" : ""));
 					} else {
-						$commandoutput = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $force );
+						$commandoutput = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $ble_repeat, $force );
 						LOGOK("teslaqueries: vid: $vid, action: $action, basecmd: $baseblecmd, command: $blecmd".($force ? ", force: $force" : ""));
 					}
 				}

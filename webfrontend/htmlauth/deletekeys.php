@@ -16,11 +16,9 @@ foreach ($argv as $arg) {
     else    
         $_REQUEST[$e[0]]=0;
 }
-
 if(!empty($_REQUEST["keysID"])) { 
 	$vin = $_REQUEST["keysID"];
 } 
-
 read_api_data($baseblecmd, $ble_repeat);
 LOGINF("deletekeys: Deleting both keys for VIN: $vin.");
 keyDelete($vin, $baseblecmd, PRIVATE_KEY);

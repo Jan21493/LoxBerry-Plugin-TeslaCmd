@@ -33,8 +33,11 @@ $keygencmd = "tesla-keygen -f -key-file ".$privateKeyWithPath." create > ".$publ
 // parameters to send keys to car (add-key-request {public_key} {role} {form_factor})
 $sendkeyscmd = "add-key-request ".$publicKeyWithPath." owner cloud_key";
 
-// verify keys in car (list-keys)
+// verify keys in car
 $verifykeyscmd = "list-keys";
+
+// get state from car
+$getstateandrssi = "body-controller-state";
 
 const UNKNOWN_KEY = 0;
 const PUBLIC_KEY = 1;

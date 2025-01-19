@@ -1,8 +1,17 @@
 <?php
 
-require_once "loxberry_web.php";
-require_once "tesla_inc.php";
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
+
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - verifykeyincar.php");
+
+LOGINF("verifykeyincar.php: -------------------- start of verifykeyincar.php -------------------- ");
+
 require_once "defines.php";
+require_once "tesla_inc.php";
 
 //
 // Query parameter 
@@ -21,14 +30,14 @@ if(!empty($_REQUEST["keysID"])) {
 	$vin = $_REQUEST["keysID"];
 } 
 
-read_api_data($baseblecmd, $ble_repeat);
+$apidata = read_api_data();
 LOGINF("verifykeyincar: Sending public key to car with VIN: $vin.");
 
-$baseblecmd = str_replace(VEHICLE_TAG, $vin, $baseblecmd);
-$verifykeyscmd = str_replace(VEHICLE_TAG, $vin, $verifykeyscmd);
-$blefullcmd = str_replace("{command}", $verifykeyscmd, $baseblecmd);
+$blefullcmd = str_replace(COMMAND_TAG, LIST_KEYS, $apidata->baseblecmd);
+$blefullcmd = str_replace(VEHICLE_TAG, $vin, $blefullcmd);
+LOGDEB("verifykeyincar: executing command: ".$blefullcmd);
 
-$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
+$result_code = tesla_shell_exec( "$blefullcmd", $output, $apidata->ble_retries, $apidata->lock_timeout, true);
 // raw output with full debugging (if enabled)
 LOGDEB("verifykeyincar: -------------------------------------------------------------------------------------");
 foreach($output as $key => $line) {
@@ -42,36 +51,45 @@ if ($result_code == 0) {
     $response = json_decode($output);
     $keylist = $response->keylist;
     getPublicKeyHex($vin, $hexKey);
-    LOGDEB("verifykeyincar: locally stored public key in raw format: ".$hexKey."##");
+    LOGDEB("verifykeyincar: locally stored public key in raw format: ".$hexKey);
     $found = false;
     foreach ($keylist as $index => &$keylistEntry) {
-        LOGDEB("verifykeyincar: hex key no ".$index."from car: ".$keylistEntry->publicKey."##");
+        //LOGDEB("verifykeyincar: hex key no ".$index." from car: ".$keylistEntry->publicKey);
         if ($hexKey == $keylistEntry->publicKey) {
-            // return HTTP response code 200 = O.K.
+            // return HTTP response code 200 = O.K. and sucess with message
             $return = array(
                 'status' => 200,
-                'message' => "Key was installed in car!"
+                'success' => 1, 
+                'message' => "Key was installed in the vehicle!"
             );
             http_response_code(200);
             $found = true;
+            LOGOK("verifykeyincar: Success! The last key matched, so it was found in the keylist of the vehicle!");
             break;
         }
     }
     if (!$found) {
-        // return HTTP response code 409 = Conflict (I didn't found a better code)
+        // return HTTP response code 200 = O.K. and no sucess with message
         $return = array(
-            'status' => 409,
-            'message' => "Key was not found in key list from vehicle."
+            'status' => 200,
+            'success' => 0, 
+            'message' => "Key was not found in key list of the vehicle."
         );
-        http_response_code(409);
+        http_response_code(200);
+        LOGERR("verifykeyincar: Failed! The key was NOT found in the keylist of the vehicle.");
     }
 } else {
-    // return HTTP response code 409 = Conflict (I didn't found a better code)
+    // return HTTP response code 200 = O.K. and no sucess with message
     $return = array(
-        'status' => 409,
+        'status' => 200,
+        'success' => 0, 
         'message' => $output
     );
-    http_response_code(409);
+    http_response_code(200);
+    LOGERR("verifykeyincar: Sending the command to verify if the key was install on the vehicle has failed! The result code was: $result_code");
 }
 print_r(json_encode($return));
+
+LOGINF("verifykeyincar.php: ==================== end of verifykeyincar.php ==================== ");
+
 ?>

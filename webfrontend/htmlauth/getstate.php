@@ -1,8 +1,16 @@
 <?php
 
-require_once "loxberry_web.php";
-require_once "tesla_inc.php";
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - getstate.php");
+
+LOGINF("getstate.php: -------------------- start of getstate.php -------------------- ");
+
 require_once "defines.php";
+require_once "tesla_inc.php";
 
 //
 // Query parameter 
@@ -20,14 +28,16 @@ foreach ($argv as $arg) {
 if(!empty($_REQUEST["keysID"])) { 
 	$vin = $_REQUEST["keysID"];
 } 
-read_api_data($baseblecmd, $ble_repeat);
+$apidata = read_api_data();
 LOGINF("getstate: Getting state information via BLE for VIN: $vin.");
 
-$blefullcmd = str_replace(VEHICLE_TAG, $vin, $baseblecmd);
-$blefullcmd = str_replace("-debug", "", $blefullcmd);
-$blefullcmd = str_replace("{command}", $getstateandrssi, $blefullcmd);
+$blefullcmd = str_replace(COMMAND_TAG, BODYCONTROLLERSTATE, $apidata->baseblecmd);
+$blefullcmd = str_replace(VEHICLE_TAG, $vin, $blefullcmd);
+$blefullcmd = str_replace(DEBUG_OPTION, "", $blefullcmd);
 
-$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
+LOGDEB("getstate: executing command: ".$blefullcmd);
+
+$result_code = tesla_shell_exec($blefullcmd, $output, $apidata->ble_retries, $apidata->lock_timeout, true);
 // raw output with full debugging (if enabled)
 LOGDEB("getstate: -------------------------------------------------------------------------------------");
 foreach($output as $key => $line) {
@@ -61,6 +71,7 @@ if ($result_code == 0) {
         'rssi' => $rssi
     );
     http_response_code(200);
+    LOGOK("getstate: Success! RSSI: $rssi, sleep status: $sleepStatus");
 } else {
     // return HTTP response code 409 = Conflict (I didn't found a better code)
     $return = array(
@@ -70,6 +81,10 @@ if ($result_code == 0) {
         'rssi' => 'unknown'
     );
     http_response_code(409);
+    LOGERR("getstate: Failed! The command to get state information has failed! The result code was: $result_code");
 }
 print_r(json_encode($return));
+
+LOGINF("getstate.php: ==================== end of getstate.php ==================== ");
+
 ?>

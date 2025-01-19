@@ -17,12 +17,9 @@ function shutdown()
 	global $log;
 	
 	if(isset($log)) {
-		LOGEND("Processing finished");
+		LOGEND("Processing for this PHP function has finished.");
 	}
 }
-
-$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
-LOGSTART("Start Logging");
 
 // Tesla API
 $tesla_api_oauth2 = 'https://auth.tesla.com/oauth2/v3';
@@ -39,7 +36,10 @@ $force = false;
 $token = false;
 $action = "noaction";
 
+// get command list from local JSON file
 $commands = get_commands();
+
+// refresh the token
 $login = tesla_refreshtoken();
 
 
@@ -315,7 +315,46 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 	return "$rawdata\n";
 }
 
-function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_repeat, $force=false )
+function tesla_ble_wake_with_check($baseblecmd, $ble_retries, $lock_timeout)
+{
+	// Purpose: Check, if vehicle is awake. If not, wake it up 
+
+	// turn off debugging, because detailed output is not logged for wakeup check and wake (if required) 
+	$baseblecmd = str_replace(DEBUG_OPTION, "", $baseblecmd);
+	// check sleep status by sending "body-controller-state" command
+	$blefullcmd = str_replace(COMMAND_TAG, BODYCONTROLLERSTATE, $baseblecmd);
+	LOGDEB("tesla_ble_wake_with_check: Check if vehicle is asleep: $blefullcmd");
+	$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_retries, $lock_timeout, true);
+	$vehicleSleepStatus = "";
+	foreach($output as $key => $line) {
+		if (strpos($line, '"vehicleSleepStatus":2') > 0) {
+			// vehicle is sleeping
+			$vehicleSleepStatus = "sleeping";
+			$blefullcmd = str_replace(COMMAND_TAG, WAKE, $baseblecmd);
+			LOGDEB("tesla_ble_wake_with_check: Need to wake vehicle: $blefullcmd");
+			$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_retries, $lock_timeout, true);
+			if ($result_code > 0) {
+				LOGDEB("tesla_ble_wake_with_check: Wakeup failed: result_code= $result_code");
+			} else {
+				LOGDEB("tesla_ble_wake_with_check: Wakeup was successful! Waiting 3 seconds.");
+				sleep(3);
+			}
+			break;
+		} else if (strpos($line, '"vehicleSleepStatus":1') > 0) {
+			// vehicle is awake
+			$vehicleSleepStatus = "awake";
+			LOGDEB("tesla_ble_wake_with_check: Vehicle is awake already - no need to wake it up");
+			break;
+		}
+	}
+	if (empty($vehicleSleepStatus)) {
+		// there is no vehicleSleepStatus in response, if BODY_CONTROLLER_STATE failed, e.g. the vehicle was away.
+		LOGINFO("tesla_ble_wake_with_check: No proper vehicleSleepStatus (either asleep or awake) in response. 'body-controller-state' may have failed, e.g. due to the fact that the vehicle was away!");
+		// but sending requested command anyway (as without force) - not sure if this should be changed to skip the command.
+	}
+}
+
+function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_retries, $lock_timeout, $force=false )
 {
 	// Function to send query via vehicle command API over BLE
 		
@@ -325,44 +364,17 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_repe
 	LOGINF("BLE Query: $action: start");
 	$action = strtoupper($action);
 	$type = $commands->{"$action"}->TYPE;
+	$baseblecmd = str_replace(VEHICLE_TAG, $vehicle_tag, $baseblecmd);
 
 	if ($force) {
-		// if wake up for command is enforced, then check sleep status
-		$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $baseblecmd);
-		LOGDEB("tesla_ble_query: Check if vehicle is asleep: $blefullcmd");
-		$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
-		$vehicleSleepStatus = "";
-		foreach($output as $key => $line) {
-			if (strpos($line, '"vehicleSleepStatus":2') > 0 || strpos($line, '"vehicleSleepStatus":"VEHICLE_SLEEP_STATUS_ASLEEP"') > 0) {
-				// vehicle is sleeping
-				$vehicleSleepStatus = "sleeping";
-				$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $baseblecmd);
-				LOGDEB("tesla_ble_query: Need to wake vehicle: $blefullcmd");
-				$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
-				if ($result_code > 0) {
-					LOGDEB("tesla_ble_query: Wakeup failed: result_code= $result_code");
-				} else {
-					LOGDEB("tesla_ble_query: Wakeup was successful! Waiting 3 seconds.");
-					sleep(3);
-				}
-				break;
-			} else if (strpos($line, '"vehicleSleepStatus":1') > 0 || strpos($line, '"vehicleSleepStatus":"VEHICLE_SLEEP_STATUS_AWAKE"') > 0) {
-				// vehicle is awake
-				$vehicleSleepStatus = "awake";
-				LOGDEB("tesla_ble_query: Vehicle is awake already - no need to wake it up");
-				break;
-			}
-		}
-		if (empty($vehicleSleepStatus)) {
-			// there is no vehicleSleepStatus in response, if BODY_CONTROLLER_STATE failed, e.g. the vehicle was away.
-			LOGINFO("tesla_ble_query: No proper vehicleSleepStatus (either asleep or awake) in response. 'body-controller-state' may have failed, e.g. due to the fact that the vehicle was away!");
-			// but sending requested command anyway (as without force) - not sure if this should be changed to skip the command.
-		}
-	} 
+		// if wake up for command is enforced, then check sleep status and wake it up if necessary
+		tesla_ble_wake_with_check($baseblecmd, $ble_retries, $lock_timeout);
+		// so far, there is no result code to stop here, e.g. if status and wake have failed
+	}
 	// sending requested command
-	$blefullcmd = str_replace("{command}", $blecmd, $baseblecmd);
-	LOGDEB("tesla_ble_query: (type: $type) $blefullcmd");
-	$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_repeat, true);
+	$blefullcmd = str_replace(COMMAND_TAG, $blecmd, $baseblecmd);
+	LOGDEB("tesla_ble_query: (type: $type) executing command: $blefullcmd");
+	$result_code = tesla_shell_exec( "$blefullcmd", $output, $ble_retries, $lock_timeout, true);
 	
 	// raw output with full debugging (if enabled)
 	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
@@ -372,7 +384,7 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_repe
 	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
 	
 	$jsondata = "";
-	// separate debug output from other (json) output
+	// separate debug output from other (json) output; debug info is removed from output 
 	foreach($output as $key => $line) {
 		if (strpos($line, "20") === 0 && strpos($line, "[") > 20 && strpos($line, "]") > 25 && strpos($line, "]") < 35) {
 			// logging output 
@@ -407,15 +419,18 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_repe
 		//echo "<pre>RAWDATA:<br>";var_dump($rawdata);echo "</pre>";
 		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
 	} else {
-		//POST
+		//POST - these commands do not send JSON output, only last line is taken
 		if ( $result_code == 0) {
-			$rawdata .= '"error_msg":""';
+			$rawdata .= '"error_msg":"", ';
+			$rawdata .= '"output_msg":"'.end($output).'"';
 		} else {
-			$rawdata .= '"error_msg":"'.end($output).'"';
+			$rawdata .= '"error_msg":"'.end($output).'", ';
+			$rawdata .= '"output_msg":""';
 		}
 		$rawdata .= ' }';
 		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
 	}
+	LOGDEB("tesla_ble_query: finished sucessfully.");
 	if (empty($logdata))
 		return $rawdata;
 	else
@@ -492,7 +507,7 @@ function pretty_print($json_data)
 				$space--;
 				if ( $json_data[$counter-1] != '{' && $json_data[$counter-1] != '[') {
 					echo "\n";
-					echo str_repeat(' ', ($space*2));
+					echo str_repeat(' ', ($space * 2));
 				}
 				$aftercolon = false;
 			}
@@ -515,7 +530,7 @@ function pretty_print($json_data)
 			}
 			if ($json_data[$counter] == ',') {
 				echo "\n";
-				echo str_repeat(' ', ($space*2));
+				echo str_repeat(' ', ($space * 2));
 				$aftercolon = false;
 			}
 			//Checking starting second and third brackets
@@ -523,7 +538,7 @@ function pretty_print($json_data)
 				$space++;
 				if ($json_data[$counter+1] != '}' && $json_data[$counter+1] != ']') {
 					echo "\n";
-					echo str_repeat(' ', ($space*2));
+					echo str_repeat(' ', ($space * 2));
 				}
 				$aftercolon = false;
 			}
@@ -664,22 +679,24 @@ function makeDir($path)
      return is_dir($path) || mkdir($path);
 }
 
-function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
+function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 15, $exclusive = false)
 {
 	$lockfile = "";
 
 	// Function to execute shell command
 	//[ ] If Timeout, restart apache server: sudo systemctl restart apache2
 	
+	LOGINF("tesla_shell_exec: Start to executing a shell command ...");
 	$command .= " 2>&1";
 	if( !empty($command) ) {
-		LOGDEB("tesla_shell_exec: $command");
+		LOGDEB("tesla_shell_exec: command: $command");
 	} else {
 		LOGERR("tesla_shell_exec: empty command");
 		return NULL;
 	}
 
 	if ($exclusive) {
+		LOGINF("tesla_shell_exec: use locking and queuing to get exclusive access to BLE device!");
 		// simple queuing system, because only one utiliy that use BLE can be run at a time!
 		// set temp directory to user loxberry UID, e.g. 1001
 		$tmpdir = "/run/user/".getmyuid().'/tesla';
@@ -689,8 +706,8 @@ function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
 			$lockfile = $tmpdir.'/'.$timestamp;
 			touch($lockfile);
 			LOGDEB("tesla_shell_exec: created lock file: $lockfile.");
-			// grant 15 seconds (multiplied with repeat counter +1) for the first process in list finish, that means to delete the file lock
-			$lockSeconds = 15 * (intval($repeat)+1);
+			// grant $lock_timeout seconds (multiplied with retries counter +1) for the first process in list finish, that means to delete the file lock
+			$lockSeconds = $lock_timeout * ((int)$retries + 1);
 			LOGDEB("tesla_shell_exec: lock for: $lockSeconds seconds.");
 			$waitSeconds = 0;
 			$fileList = scandir($tmpdir);
@@ -702,7 +719,6 @@ function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
 				$firstFile = $fileList[2];
 				LOGDEB("tesla_shell_exec: first entry: $firstFile");
 				LOGDEB("tesla_shell_exec: queue length: ".(count($fileList)-2).", position: ".(array_search($timestamp, $fileList)-1));
-				// maximal waiting time is 15s * 2 exec times = 30s
 				if ($firstFile == $timestamp) {
 					LOGDEB("tesla_shell_exec: queue is empty - very good.");
 				}
@@ -718,7 +734,7 @@ function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
 							foreach ($fileList as $key => $fileEntry) {
 								LOGDEB("tesla_shell_exec: file list entry no: $key, entry: $fileEntry");
 							}
-							$lockSeconds = 15 * (intval($repeat)+1);
+							$lockSeconds = $lock_timeout * ((int)$retries + 1);
 							$firstFile = $fileList[2];
 							LOGDEB("tesla_shell_exec: queue length: ".(count($fileList)-2).", position: ".(array_search($timestamp, $fileList)-1).", waiting: ".$waitSeconds." seconds.");
 						}
@@ -732,12 +748,15 @@ function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
 						unlink($tmpdir.'/'.$firstFile);
 					}
 				}
-				LOGDEB("tesla_shell_exec: waiting for other BLE commands to finish for $waitSeconds seconds.");
+				LOGINF("tesla_shell_exec: Waiting time in queue for other BLE commands to finish: $waitSeconds seconds.");
+				if ($waitSeconds >= 300) {
+					LOGWARN("tesla_shell_exec: We finally gave up and are now trying to execute the command without exclusive access anyway.");
+				} 
 			} else {
-				LOGERR("tesla_shell_exec: file list has no entries except . and ..");	
+				LOGERR("tesla_shell_exec: file list that is used for queuing has no entries except . and .. ! File lock for this process is missing.");	
 			}
 		} else {
-			LOGERR("tesla_shell_exec: can't create ".$tmpdir." and it does not exist. Try it without exclusive access!");
+			LOGERR("tesla_shell_exec: ".$tmpdir." does not exist and can't be created. Try command now without exclusive access!");
 		}
 	}
 	$eta=-hrtime(true);
@@ -745,32 +764,32 @@ function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
 	$result_code=NULL;
 	exec($command, $output, $result_code);
 	$eta+=hrtime(true);
-	LOGDEB("tesla_shell_exec: execution time for command: ".($eta/1e+6)." milliseconds.");
+	LOGINF("tesla_shell_exec: execution time for shell command: ".($eta/1e+6)." milliseconds.");
 
-	//Did an error occur? If so, repeat the command
+	//Did an error occur? If so, retry the command
 	if ($result_code > 0) {
+		LOGWARN("tesla_shell_exec: command has returned an error! The result code was: " . $result_code);
 		// On an Orange PI zero 3 with DietPi v9.7.1 (Bookworm, released July 2024) the command returned errors after typically 1-2 hours
 		// so this 'dirty' fix was added that restarts the bluetooth service. There might be an error in the bluetooth driver that I can't fix.
 		exec("cat /sys/firmware/devicetree/base/model", $output2, $result_code2);
 		$model = $output2[0];
+		LOGINF("tesla_shell_exec: '$model' detected!");
 		if (($result_code2 == 0) && ($model=="OrangePi Zero3")) {
 			// restart bluetooth service on Orange PI Zero 3 - does not really work great
-			// and repeat the command (one time - fixed)
-			LOGINF("tesla_shell_exec: result code " . $result_code);
-			LOGDEB("tesla_shell_exec: '$model' detected!");
-			LOGDEB("tesla_shell_exec: restarting aw859a-bluetooth.service!");
+			// and retry the command (one time - fixed)
+			LOGINF("tesla_shell_exec: restarting aw859a-bluetooth.service and waiting for 5 seconds!");
 			exec("sudo systemctl restart aw859a-bluetooth.service", $output2, $result_code2);
 			sleep(5);
 		}
-		// repeat command depending on repeat setting
-		if ($repeat == "0") {
-			LOGDEB("tesla_shell_exec: '$model' detected! Last command is not repeated.");
+		// retry command depending on 'retries' setting
+		if ($retries == "0") {
+			LOGDEB("tesla_shell_exec: Last command will not be repeated, because 'retries' setting is set to 0 times!");
 		} else {
-			LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated after waiting 5 seconds ...");				
+			LOGDEB("tesla_shell_exec: Last command will be repeated after waiting for 5 seconds ...");				
 			sleep(5);
 			exec($command, $output, $result_code);
-			if (($repeat == "2") && ($result_code != 0)) {
-				LOGDEB("tesla_shell_exec: '$model' detected! Last command is repeated again after waiting 5 seconds ...");				
+			if (($retries == "2") && ($result_code != 0)) {
+				LOGDEB("tesla_shell_exec: Last command failed again and is repeated again after waiting 5 seconds ...");				
 				sleep(5);
 				exec($command, $output, $result_code);
 			}
@@ -779,7 +798,7 @@ function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
 	}
 	//Did an error occur? If so, dump it out.
 	if(is_null($result_code != 0)){
-		LOGERR("tesla_shell_exec: result code " . $result_code);
+		LOGINF("tesla_shell_exec: command has returned an error. Final result code:" . $result_code);
 	}
 	// remove file lock
 	if ($exclusive) {
@@ -787,9 +806,12 @@ function tesla_shell_exec( $command, &$output, $repeat = 0, $exclusive = false)
 		LOGDEB("tesla_shell_exec: removed lock file: $lockfile");
 	}
 
-	LOGDEB("tesla_shell_exec: exec finished");
 	// Debugging
-	LOGDEB("tesla_shell_exec: result code: " . $result_code);
+	if ($result_code == 0) {
+		LOGOK("tesla_shell_exec: finished successfully!");
+	} else {
+		LOGERR("tesla_shell_exec: finished with error! result code: " . $result_code);
+	}
 
 	return $result_code;
 }
@@ -972,41 +994,67 @@ function tesla_oauth2_refresh_token($bearer_refresh_token)
     return $bearer_token;
 }
 
-function read_api_data(&$custom_baseblecmd, &$ble_repeat)
+function read_api_data()
 {
 	// used for vehicle-command API that requires VIN. Currently only type BLE is implemented
-	LOGINF("read_api_data: Read API settings (custom BLE command and repeat interval).");
-	
+	LOGINF("read_api_data: Read API settings (BLE timeouts, debug option and number of retries).");
+
 	if( !file_exists(APIFILE) ) {
-		LOGDEB("read_api_data: Empty API data.");
-		$custom_baseblecmd = $default_baseblecmd;
-		$ble_repeat = 0;
-		return;
+		LOGDEB("read_api_data: No file with API settings found. Using defaults.");
+
+		$apidata = new stdClass();
+		$apidata->command_timeout = 5;
+    	$apidata->connect_timeout = 20;
+    	$apidata->tesla_debug = "off";
+    	$apidata->ble_retries = 1;
+	} else {
+		LOGDEB("read_api_data: Reading content from API file: ".APIFILE);
+		$apidata = json_decode(file_get_contents(APIFILE));
+		if (is_numeric($apidata->command_timeout))
+			$apidata->command_timeout = (int)$apidata->command_timeout;
+		else
+			$apidata->command_timeout = 5;
+		if (is_numeric($apidata->connect_timeout))
+			$apidata->connect_timeout = (int)$apidata->connect_timeout;
+		else
+			$apidata->connect_timeout = 20;
+		if (is_numeric($apidata->tesla_debug))
+			$apidata->tesla_debug = (int)$apidata->tesla_debug;
+		else
+			$apidata->tesla_debug = 0;
+		if (is_numeric($apidata->ble_retries))
+			$apidata->ble_retries = (int)$apidata->ble_retries;
+		else
+			$apidata->ble_retries = 1;
+
+		$apidata->lock_timeout = $apidata->command_timeout + $apidata->connect_timeout + 1;
+
+		LOGDEB("read_api_data: command timeout: ".$apidata->command_timeout);
+		LOGDEB("read_api_data: connect timeout: ".$apidata->connect_timeout);
+		LOGDEB("read_api_data: debug option: ".$apidata->tesla_debug);
+		LOGDEB("read_api_data: retries: ".$apidata->ble_retries);
 	}
-	$apidata = json_decode(file_get_contents(APIFILE));
-	if ($apidata->{"baseblecmd"})
-		$custom_baseblecmd = $apidata->{"baseblecmd"};
-	else
-		$custom_baseblecmd = $default_baseblecmd;
-	if ($apidata->{"blerepeat"})
-		$ble_repeat = $apidata->{"blerepeat"};
-	else
-		$ble_repeat = 0;
+	
+	// create generic tesla-control command with options
+	$apidata->baseblecmd = TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s ";
+	if ($apidata->tesla_debug) {
+		$apidata->baseblecmd .= DEBUG_OPTION." ";
+	}
+	$apidata->baseblecmd .= COMMAND_TAG;
+	LOGDEB("read_api_data: base BLE command: ".$apidata->baseblecmd);
+	return $apidata;
 }
 
-function write_api_data($custom_baseblecmd, $ble_repeat)
+function write_api_data($apidata)
 {
     // see read function for details about content
 	LOGINF("write_api_data: Write API settings.");
 	
-	$apidata = new stdClass();
-	if (isset($custom_baseblecmd))
-		$apidata->{"baseblecmd"} = $custom_baseblecmd;
-	if (isset($ble_repeat))
-		$apidata->{"blerepeat"} = $ble_repeat;
+	// will be calculated
+	unset($apidata->lock_timeout);
 
 	$apidata = json_encode($apidata);	
-	LOGDEB("write_api_data: write apifile.");
+	LOGDEB("write_api_data: write API data to file: ".APIFILE);
 	file_put_contents(APIFILE, $apidata);
 	
 	return;
@@ -1014,14 +1062,14 @@ function write_api_data($custom_baseblecmd, $ble_repeat)
 
 function keyCheck($vin, $keytype = PRIVATE_KEY)
 {
-	global $publicKeyWithPath, $privateKeyWithPath;
+	global $keyTypeNames;
 
 	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
-	LOGINF("keyCheck: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin and is valid.");
-	if ($keytype == PUBLIC_KEY) {
-		$keyfile = str_replace(VEHICLE_TAG, $vin, $publicKeyWithPath);
+	LOGINF("keyCheck: Checking if a ".$keyTypeNames[(int)$keytype]." exists for VIN: $vin and is valid.");
+	if ((int)$keytype == PUBLIC_KEY) {
+		$keyfile = str_replace(VEHICLE_TAG, $vin, PUBLIC_KEY_WITH_PATH);
 	} else {
-		$keyfile = str_replace(VEHICLE_TAG, $vin, $privateKeyWithPath);
+		$keyfile = str_replace(VEHICLE_TAG, $vin, PRIVATE_KEY_WITH_PATH);
 	}
 	LOGINF("keyCheck: Read key file '$keyfile'.");
 
@@ -1053,15 +1101,14 @@ function keyCheck($vin, $keytype = PRIVATE_KEY)
 
 function getPublicKeyHex($vin, &$hexKey)
 {
-	global $publicKeyWithPath;
-
-	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
-	LOGINF("keyCheck: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin and is valid.");
-	$keyfile = str_replace(VEHICLE_TAG, $vin, $publicKeyWithPath);
-	LOGINF("keyCheck: Read key file '$keyfile'.");
+	global $keyTypeNames;
+	
+	LOGINF("getPublicKeyHex: Retrieving public key for VIN: $vin in hex format.");
+	$keyfile = str_replace(VEHICLE_TAG, $vin, PUBLIC_KEY_WITH_PATH);
+	LOGINF("getPublicKeyHex: Read key file '$keyfile'.");
 
 	if( !file_exists($keyfile) ) {	
-		LOGDEB("keyCheck: Key file '$keyfile' missing.");
+		LOGDEB("getPublicKeyHex: Key file '$keyfile' missing.");
 		return 1;
 	}
 	$keylines = [];
@@ -1084,16 +1131,15 @@ function getPublicKeyHex($vin, &$hexKey)
 		}
 	}
 
-
 	if ($startOfKey > 0 && $startOfKey < $endOfKey) {
-		LOGDEB("keyCheck: Key file seems to be O.K.");
-		LOGDEB("keyCheck: base64Key: ".$base64Key);
+		LOGDEB("getPublicKeyHex: Key file seems to be O.K.");
+		LOGDEB("getPublicKeyHex: base64Key: ".$base64Key);
 		$hexKey = substr(bin2hex(base64_decode($base64Key)), 52);
-		LOGDEB("keyCheck: raw public key in hex format: ".$hexKey);
+		LOGDEB("getPublicKeyHex: raw public key in hex format: ".$hexKey);
 
 		return 0;
 	} else {
-		LOGDEB("keyCheck: Wrong format of key file (PEM format expected: key must be after a line with '-----BEGIN ...' and before '-----END ...'.");
+		LOGDEB("getPublicKeyHex: Wrong format of key file (PEM format expected: key must be after a line with '-----BEGIN ...' and before '-----END ...'.");
 		$hexKey = "";
 		return 2;
 	}
@@ -1101,30 +1147,24 @@ function getPublicKeyHex($vin, &$hexKey)
 
 function keyDelete($vin, $keytype = PRIVATE_KEY)
 {
-	global $publicKeyWithPath, $privateKeyWithPath;
+	global $keyTypeNames;
+	
+	LOGINF("keyDelete: Checking if a ".$keyTypeNames[(int)$keytype]." exists for VIN: $vin.");
 
-	// private key needs to be specified in BLE command with '{vehicle_tag}-private.pem' ({vehicle_tag} is replaced with VIN of vehicle)
-	LOGINF("keyDelete: Checking if a ".$keyTypeNames[$keytype]." exists for VIN: $vin.");
-
-	if ($keytype == PUBLIC_KEY) {
-		$keyfile = str_replace(VEHICLE_TAG, $vin, $publicKeyWithPath);
+	if ((int)$keytype == PUBLIC_KEY) {
+		$keyfile = str_replace(VEHICLE_TAG, $vin, PUBLIC_KEY_WITH_PATH);
 	} else {
-		$keyfile = str_replace(VEHICLE_TAG, $vin, $privateKeyWithPath);
+		$keyfile = str_replace(VEHICLE_TAG, $vin, PRIVATE_KEY_WITH_PATH);
 	}
 	LOGINF("keyDelete: Delete key file '$keyfile'.");
 
 	if( !file_exists($keyfile) ) {	
-		LOGDEB("keyDelete: Key file '$keyfile' missing.");
+		LOGWARN("keyDelete: Key file '$keyfile' missing.");
 		return 1;
 	}
-	if (file_exists($keyfile)) {
-        unlink($keyfile);
-		LOGDEB("keyDelete: Key file was deleted.");
-		return 0;
-	} else {
-		LOGDEB("keyDelete: Key file was not found.");
-		return 1;
-	}
+	unlink($keyfile);
+	LOGOK("keyDelete: Key file was deleted.");
+	return 0;
 }
 
 function getYearFromVIN($vin) {

@@ -1,8 +1,17 @@
 <?php
-require_once "loxberry_system.php";
+
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
 require_once "loxberry_web.php";
-require_once "tesla_inc.php";
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - testqueries.php");
+
+LOGINF("testqueries.php: -------------------- start of testqueries.php -------------------- ");
+
 require_once "defines.php";
+require_once "tesla_inc.php";
 
 $navbar[3]['active'] = True;
 
@@ -64,9 +73,16 @@ if($tokenvalid == "false") {
 <!-- Queries -->
 <?php
 	$vehicles = tesla_summary();
-    read_api_data($baseblecmd, $ble_repeat);
+    $apidata = read_api_data();
+	$baseblecmd = $apidata->baseblecmd;
 	if (isset($vid) && isset($vehicles->{"$vid"})) {
 		$selected_vehicle = $vehicles->{"$vid"};
+		if(isset($selected_vehicle->vin)) {
+			$vin = $selected_vehicle->vin;
+		} else {
+			$vin = "";
+		}
+
 	}
 	$send_command = false;
 	// submit button was pressed and query should be send
@@ -161,7 +177,8 @@ if($tokenvalid == "false") {
 					$tag = "{vehicle_tag}";
 				}
 				// show command if it is matching the selected API, TAG is defined for the command and matching the vehicle / energy site
-				if (in_array(getApiProtocol($selected_vehicle->vin), $attribute->API) && !empty($attribute->TAG) && ($tag == $attribute->TAG)) {
+				// energy sites have empty vin, so Owner's API is choosen, API for vehicles is calculated by VIN
+				if (in_array(getApiProtocol($vin), $attribute->API) && !empty($attribute->TAG) && ($tag == $attribute->TAG)) {
 ?>
 					<option value="<?=$cmd;?>" <?php if($cmd == $action){ echo " selected"; $command = $attribute; } ?>>
 					<?=$cmd;?>
@@ -195,7 +212,7 @@ if($tokenvalid == "false") {
 			<td>
 <?php
 		// wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested
-		if ($type == $vid && isset($selected_vehicle->vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
+		if (($type == $vid) && (!empty($vin)) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
 ?>				
                     <fieldset data-role="controlgroup">
                         <input
@@ -272,19 +289,19 @@ if($tokenvalid == "false") {
 			// replace any tags with ID or VIN, if command is for a specific vehicle / energy site
 			if (!empty($command->TAG)) {
 				if (!empty($vid)) {
-					LOGDEB("teslaqueries: vid: ".$vid);
-
-					if (isset($selected_vehicle->vin)) {
+					if (!empty($vin)) {
 						// vehicle
-						$uri = str_replace($command->TAG, "$selected_vehicle->vin", $uri);
-						$baseblecmd = str_replace($command->TAG, "$selected_vehicle->vin", $baseblecmd);
+						$uri = str_replace($command->TAG, "$vin", $uri);
+						$baseblecmd = str_replace($command->TAG, "$vin", $apidata->baseblecmd);
+						LOGDEB("testqueries: vehicle ID: ".$vid.", VIN: ".$vin);
 					} else {
 						// energy site or vehicle, but no vin in mapping table
 						$uri = str_replace($command->TAG, "$vid", $uri);
+						LOGDEB("testqueries: energy site or vehicle, but no VIN found, using ID: ".$vid.", VIN: ".$vin);
 					}
 				} else {
 					$command_output =  $command_output."Parameter 'VID' is missing! The ID of the vehicle.\n";
-					LOGINF("Parameter \"VID\" missing");
+					LOGERR("Parameter \"VID\" missing");
 					$command_error = true;
 				}
 
@@ -293,7 +310,6 @@ if($tokenvalid == "false") {
 						$value = $_REQUEST["$param"];
 						$optional = strpos($blecmd, "[".$param."]");
 						if (!empty($value) || $optional) {
-							LOGDEB("teslaqueries: $param: ".$value);
 							$command_post += array("$param" => $value);
 							// optional parameters with empty value are skipped
 							if (!$optional || ($value != "")) {
@@ -308,40 +324,51 @@ if($tokenvalid == "false") {
 							}
 						} else {
 							$commandoutput = $commandoutput."Parameter '$param' missing! $param_desc\n";
-							LOGINF("Parameter '$param' missing");
+							LOGERR("Parameter '$param' missing");
 							$command_error = true;
 						}
 					}
 				}
-
 				if (!$command_error) {
 					// select API - either owner's api or vehicle command via ble 
-					if (getApiProtocol($selected_vehicle->vin) == OWNERS_API || empty($blecmd)) {
-						$commandoutput = tesla_query( $vid, $action, $command_post, $force );
-						LOGOK("teslaqueries: vid: $vid, action: $action ".$command_post_print.($force ? ", force: $force" : ""));
+					if (getApiProtocol($vin) == OWNERS_API || empty($blecmd)) {
+						LOGDEB("testqueries: sending command via Internet (Owner's API) ... ");
+						if (empty($vin)) {
+							$commandoutput = tesla_query( $vid, $action, $command_post, $force );
+							LOGOK("testqueries: using ID: $vid, action: $action ".$command_post_print.($force ? ", force: $force" : ""));
+						} else {
+							$commandoutput = tesla_query( $vin, $action, $command_post, $force );
+							LOGOK("testqueries: using VIN: $vin (ID: $vid), action: $action ".$command_post_print.($force ? ", force: $force" : ""));
+						}
 					} else {
-						$commandoutput = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $ble_repeat, $force );
-						LOGOK("teslaqueries: vid: $vid, action: $action, basecmd: $baseblecmd, command: $blecmd".($force ? ", force: $force" : ""));
+						LOGDEB("testqueries: sending command via BLE ... ");
+						if (empty($vin)) {
+							$commandoutput = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $apidata->ble_retries, $apidata->lock_timeout, $force );
+							LOGOK("testqueries: using ID: $vid, action: $action, basecmd: $baseblecmd, command: $blecmd".($force ? ", force: $force" : ""));
+						} else {
+							$commandoutput = tesla_ble_query( $vin, $action, $baseblecmd, $blecmd, $apidata->ble_retries, $apidata->lock_timeout, $force );
+							LOGOK("testqueries: using VIN: $vin (ID: $vid), action: $action, basecmd: $baseblecmd, command: $blecmd".($force ? ", force: $force" : ""));
+						}
 					}
 				}
 
 			} else {
 				// general command - owner's api only
-				LOGOK("teslaqueries: action: $action");
+				LOGOK("testqueries: action: $action");
 				//[x] removed $vid
 				$commandoutput = tesla_query( "", $action, $command_post );
 			}
 		} else {
 			$commandoutput =  "Command not found\n";
-			LOGERR("teslaqueries: Command not found");
+			LOGERR("testqueries: Command not found");
 		}
 
 		// display URLs, command(s), and response
 		$lburi = "?action=".$action.$command_get;
 
 		if (!empty($command->TAG)) {
-			if (isset($selected_vehicle->vin)) {
-				$lburi = strtolower($lburi)."&vin=".$selected_vehicle->vin; 
+			if (!empty($vin)) {
+				$lburi = strtolower($lburi)."&vin=".$vin; 
 			} else {
 				$lburi = strtolower($lburi."&vid=".$type); 
 			}
@@ -351,9 +378,9 @@ if($tokenvalid == "false") {
 
 		if (isset($commandoutput)) {
 			if (!$command_error) {
-				if (in_array(getApiProtocol($selected_vehicle->vin), $command->API)) {
+				if (in_array(getApiProtocol($vin), $command->API)) {
 					echo "<br>Translated by TeslaConnect Plugin on Loxberry and send using <span class=\"mono\">";
-					if (getApiProtocol($selected_vehicle->vin) == OWNERS_API || empty($blecmd)) {
+					if (getApiProtocol($vin) == OWNERS_API || empty($blecmd)) {
 						if (isset($command->URI)) { 
 							echo $apinames[OWNERS_API]."</span> as TLS GET Request with Bearer-Token to:<br><span class=\"mono\">".BASEURL.$uri."</span><br>"; 
 						}
@@ -363,12 +390,12 @@ if($tokenvalid == "false") {
 					} else {
 						echo "Vehicle Command API locally via BLE</span> :<br>";
 						if ($force) {
-							$blefullcmd = str_replace("{command}", $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $baseblecmd);
+							$blefullcmd = str_replace(COMMAND_TAG, $commands->{"BODY_CONTROLLER_STATE"}->BLECMD, $baseblecmd);
 							echo "Get status: <span class=\"mono\">".$blefullcmd."</span><br>";
-							$blefullcmd = str_replace("{command}", $commands->{"BLE_WAKE"}->BLECMD, $baseblecmd);
+							$blefullcmd = str_replace(COMMAND_TAG, $commands->{"BLE_WAKE"}->BLECMD, $baseblecmd);
 							echo "If asleep: <span class=\"mono\">".$blefullcmd."</span><br>";
 						}
-						$blefullcmd = str_replace("{command}", $blecmd, $baseblecmd);
+						$blefullcmd = str_replace(COMMAND_TAG, $blecmd, $baseblecmd);
 						echo "<span class=\"mono\">".$blefullcmd."</span><br>";
 					}
 				}
@@ -399,4 +426,6 @@ if($tokenvalid == "false") {
 }
 
 LBWeb::lbfooter();
+LOGINF("testqueries.php: ==================== end of testqueries.php ==================== ");
+
 ?>

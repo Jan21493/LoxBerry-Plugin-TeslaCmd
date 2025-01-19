@@ -1,8 +1,16 @@
 <?php
 
-require_once "loxberry_web.php";
-require_once "tesla_inc.php";
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - deletekeys.php");
+
+LOGINF("deletekeys.php: -------------------- start of deletekeys.php -------------------- ");
+
 require_once "defines.php";
+require_once "tesla_inc.php";
 
 //
 // Query parameter 
@@ -19,9 +27,10 @@ foreach ($argv as $arg) {
 if(!empty($_REQUEST["keysID"])) { 
 	$vin = $_REQUEST["keysID"];
 } 
-read_api_data($baseblecmd, $ble_repeat);
-LOGINF("deletekeys: Deleting both keys for VIN: $vin.");
-keyDelete($vin, $baseblecmd, PRIVATE_KEY);
-keyDelete($vin, $baseblecmd, PUBLIC_KEY);
+LOGINF("deletekeys: Deleting both keys (public and private) for VIN: $vin.");
+keyDelete($vin, PRIVATE_KEY);
+keyDelete($vin, PUBLIC_KEY);
+
+LOGINF("deletekeys.php: ==================== end of deletekeys.php ==================== ");
 
 ?>

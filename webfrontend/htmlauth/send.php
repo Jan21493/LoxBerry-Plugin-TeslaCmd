@@ -1,16 +1,18 @@
 <?php
-//TODO: Add more commands
 //TODO: Add command to check if token valid
-/*
-php ./send.php a=summary
-php ./send.php action=summary
-php ./send.php action=vehicle_data vid=123
-php ./send.php a=vehicle_data v=123
-/send.php?a=vehicle_data&v=123
-*/
+
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
 require_once "loxberry_web.php";
-require_once "tesla_inc.php";
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - send.php");
+
+LOGINF("send.php: -------------------- start of send.php -------------------- ");
+
 require_once "defines.php";
+require_once "tesla_inc.php";
 
 //
 // Query parameter 
@@ -33,7 +35,8 @@ if(!empty($_REQUEST["action"])) {
 }
 $command = $commands->{strtoupper($action)};
 
-// Define vehicle
+// Either ID (vid), or VIN (vin) needs to be specified. Both CAN be provided.
+// There are a few general commands that do not need an ID/VID, but all commands that work over BLE
 if(!empty($_REQUEST["vehicle"])) { 
 	$vid = $_REQUEST["vehicle"];
 } elseif (!empty($_REQUEST["v"])) { 
@@ -49,18 +52,17 @@ if(!empty($_REQUEST["vin"])) {
 //debug may be added to or removed from request, default is the command option from settings menu.
 if(!empty($_REQUEST["debug"])) { 
 	$debug = $_REQUEST["debug"];
-	LOGDEB("tesla_command: debug=$debug.");
+	LOGDEB("send.php: Debugging is turned on: debug=$debug.");
 } 
-read_api_data($baseblecmd, $ble_repeat);
+$apidata = read_api_data();
 // owner's api is assumed and vin=vid, if no mapping was found
 $api = 0;
-// VIN was provided 
-if (isset($vin)) {
-	$vid = $vin;
+// VIN was provided. There is no need to look up for vehicles that belong to a specific ID
+if (!empty($vin)) {
 	$api = getApiProtocol($vin);
-	LOGDEB("tesla_command: VIN: $vin was provided. ".$apinames[$api]." is used.");
-} elseif (isset($vid)) {
-	// Vehicle ID was provided 
+	LOGDEB("send.php: VIN: $vin was provided, ".(empty($vid) ? ", no ID" : ", ID: $vid").", ".$apinames[$api]." is used.");
+} elseif (!empty($vid)) {
+	// Vehicle ID was provided. A lookup is done to get all vehicles / energy sites that are associated with the ID
 	$vehicles = tesla_summary();
     foreach ($vehicles as $index => &$vehicle) {
 		// vehicle was found
@@ -69,11 +71,13 @@ if (isset($vin)) {
 			$api = getApiProtocol($vin);
 		}
 	} 
-	LOGDEB("tesla_command: VID: $vid was provided, lookup for VIN got: $vin. ".$apinames[$api]." is used.");
-} 
+	LOGDEB("send.php: ID: $vid was provided, lookup for VIN got: $vin, ".$apinames[$api]." is used.");
+} else {
+	LOGDEB("send.php: no ID or VIN was provided, assuming a general command,  ".$apinames[$api]." is used.");
+}
 
 // wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested
-if (isset($vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
+if (!empty($vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
 	// Define force
 	if(!empty($_REQUEST["force"])) { 
 		$force = $_REQUEST["force"];
@@ -88,32 +92,33 @@ if(isset($command)) {
 	$command_output = "";
 	$command_error = false;
 
-
 	// error if command is not supported with selected api
 	if (!in_array($api, $command->API)) {
 		$command_output = "Command is not supported in ".$apinames[int($api)].". Verify API settings.\n";
-		LOGERR("tesla_command: Command not supported in ".$apinames[int($api)]);
+		LOGERR("send.php: Command not supported in ".$apinames[int($api)]);
 		$command_error = true;
 	}
 
 	if (!empty($command->TAG)) {
 		// a command for a specific vehicle or energy site is selected
 		if(!empty($vid) || !empty($vin)) {
-			LOGDEB("tesla_command: vid: ".$vid." and/or vin: ".$vin." was provided".($force ? ", force: $force" : ""));
+			LOGDEB("send.php: ID: ".$vid." and/or VIN: ".$vin." was/were provided".($force ? ", force: $force." : ", no force."));
 		} else {
 			// error if vid is no provided, but required for the command
-			$command_output =  $command_output."Parameter \"VID\" (ID of vehicle or energy site) is missing, but required for the command.\n";
-			LOGDEB("tesla_command: Parameter \"VID\" missing, but required");
+			$command_output =  $command_output."Parameter \"VID\" (ID of vehicle or energy site) or \"VIN\" (for vehicles only) is missing, but required for the command.\n";
+			LOGDEB("send.php: Parameter \"VID\" or \"VIN\" are missing, but one of them is required for command \"$action\".");
 			$command_error = true;
 		}
 		$blecmd = $command->BLECMD;
 		if(isset($command->PARAM)) {																			
 			foreach ($command->PARAM as $param => $param_desc) {
-				LOGDEB("tesla_command: Parameter \"$param\": $param_desc");
 				$value = $_REQUEST["$param"];
 				$optional = strpos($blecmd, "[".$param."]");
 				if (!empty($value) || $optional) {
-					LOGDEB("tesla_command: $param: ".$value);
+					if (!empty($value)) {
+						LOGDEB("send.php: parameter \"$param\"=\"$value\", description: $param_desc");
+					}
+					// need to send all optional parameters even if empty in case another (non-empty) parameter is following 
 					$command_post += array("$param" => $value);
 					$command_post_print = $command_post_print.", $param: ".$value;
 					if ($optional) 
@@ -122,59 +127,69 @@ if(isset($command)) {
 						$blecmd = str_replace("{".$param."}", $value, $blecmd);
 				} else {
 					$command_output = $command_output."Parameter \"$param\" missing! $param_desc\n";
-					LOGDEB("tesla_command: Parameter \"$param\" missing");
+					LOGDEB("send.php: Parameter \"$param\" missing");
 					$command_error = true;
 				}
 			}
 		}
-		// Fallback to Owner's API, if BLE command is not available (yet)
-		if ($api == 1 && empty($command->BLECMD) && in_array(OWNERS_API, $command->API))
-			$api = 0;
-
-		if ($api == 1 && empty($vin)) {
+		if ($api == BLE_PLUS_OWNERS_API && empty($vin)) {
 			// error if vehicle command API is selected, but VIN is missing (not in API mapping)
 			$command_output =  $command_output."Vehicle command API is selected, but VIN is missing. Verify API settings.\n";
-			LOGDEB("tesla_command: VIN is missing, but required for Vehicle command API");
+			LOGDEB("send.php: VIN is missing, but required for Vehicle command API");
 			$command_error = true;
 		}
-		if (($api == 1) && !empty($blecmd) && ($command->AUTH == true) && keyCheck($vin, $baseblecmd, PRIVATE_KEY) != 0) {
+		// Fallback to Owner's API, if BLE command is not available (yet)
+		if ($api == BLE_PLUS_OWNERS_API && empty($blecmd) && in_array(OWNERS_API, $command->API)) {
+			$api = OWNERS_API;
+			LOGDEB("send.php: fallback to Owner's API, because BLE command is not available (yet). NOTE: It may not work!");
+		}
+	
+		if (($api == BLE_PLUS_OWNERS_API) && !empty($blecmd) && ($command->AUTH == true) && keyCheck($vin, $apidata->baseblecmd, PRIVATE_KEY) != 0) {
 			// error if vehicle command API is selected, command requires authentication, but private key is missing
 			$command_output =  $command_output."Vehicle command API is selected and command requires authentication, but private key is missing.\n";
-			LOGDEB("tesla_command: BLE command requires authentication, but private key is missing.");
+			LOGDEB("send.php: BLE command requires authentication, but private key is missing.");
 			$command_error = true;
 		}
 
 		if (!$command_error) {
 			// select API - either owner's api or vehicle command via ble 
-			if ($api == 0 || empty($blecmd)) {
-				$command_output =  tesla_query( $vid, $action, $command_post, $force );
-				LOGOK("tesla_command: vid: $vid, vin: $vin, action: $action".$command_post_print.($force ? ", force: $force" : ""));
+			if ($api == OWNERS_API || empty($blecmd)) {
+				if (empty($vin)) {
+					$command_output =  tesla_query( $vid, $action, $command_post, $force );
+					LOGOK("send.php: ID: $vid, no vin, action: $action".$command_post_print.($force ? ", force: $force." : ", no force."));
+				} else {
+					$command_output =  tesla_query( $vin, $action, $command_post, $force );
+					LOGOK("send.php: VIN: $vin, (vid: $vid), action: $action".$command_post_print.($force ? ", force: $force." : ", no force."));				
+				}
 			} else {
-				$baseblecmd = str_replace($command->TAG, $vin, $baseblecmd);
+				// $api == BLE_PLUS_OWNERS_API
+				$baseblecmd = str_replace($command->TAG, $vin, $apidata->baseblecmd);
 
-				// if debug option is provided, then adjust debug in command if necessary
+				// if debug option is provided, then adjust debug in command if necessary (command line options override selected settings)
 				if (!empty($debug)) {
-					LOGDEB("tesla_command: verify debug setting.");
-					if (strpos($baseblecmd, "-debug") && ($debug === "false")) {
-						$baseblecmd = str_replace("-debug", "", $baseblecmd);
-					} elseif (!strpos($baseblecmd, "-debug") && ($debug === "true")) {
-						$baseblecmd = str_replace("{command}", "-debug {command}", $baseblecmd);
+					LOGDEB("send.php: debug option provided. \"debug\"=\"$debug\" This overrides selected setting.");
+					if (strpos($baseblecmd, DEBUG_OPTION) && ($debug === "false")) {
+						$baseblecmd = str_replace(DEBUG_OPTION, "", $baseblecmd);
+					} elseif (!strpos($baseblecmd, DEBUG_OPTION) && ($debug === "true")) {
+						$baseblecmd = str_replace(COMMAND_TAG, DEBUG_OPTION." ".COMMAND_TAG, $baseblecmd);
 					}
 				}
-				$command_output = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $ble_repeat, $force );
-				LOGOK("tesla_command: vid: $vid, vin: $vin, action: $action, cmd: $baseblecmd $blecmd".($force ? ", force: $force" : ""));
+				$command_output = tesla_ble_query( $vin, $action, $baseblecmd, $blecmd, $apidata->ble_retries, $apidata->lock_timeout, $force );
+				LOGOK("send.php: VIN: $vin, (ID: $vid), action: $action, cmd: $baseblecmd $blecmd".($force ? ", force: $force" : ", no force."));
 			}
 		}
 	} else {
 		// a general command is selected (these commands don't have parameters and are always send via Owner's API)
 		if (!$command_error) {
 			$command_output =  tesla_query( $vid, $action, $command_post, $force );
-			LOGOK("tesla_command: action: $action".($force ? ", force: $force" : ""));
+			LOGOK("send.php: ID: $vid, action: $action (general command)".($force ? ", force: $force" : ", no force."));
 		}
 	}
 } else {
 	$command_output =  "Command not found\n";
-	LOGERR("tesla_command: Command not found");
+	LOGERR("send.php: Command not found");
 }
 echo $command_output;
+LOGINF("send.php: ==================== end of send.php ==================== ");
+
 ?>

@@ -4,9 +4,16 @@
 // [x] Querypage
 // [x] Testpage
 
-
-require_once "loxberry_system.php";
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
 require_once "loxberry_web.php";
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - index.php");
+
+LOGINF("index.php: -------------------- start of index.php -------------------- ");
+
 require_once "defines.php";
 require_once "tesla_inc.php";
 
@@ -125,19 +132,20 @@ $tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
         <p>Install a public key in your car with VIN <b><span id="popupInstallKeysID"></span></b>?</p>
         <p><b>NOTE:</b> The public key in your car is used to verify signed messages and important to be able to send control commands that require authentication via BLE to your car.</p>
         <p>1. Click on the <b>Start</b> button to start the process. </p>
-        <p style="color:red"><b>IMPORTANT:</b> The car needs to be awake when the process is started!</p>
-        <p>2. When a 'Tap NFC card!' message is displayed here, you have 30 seconds only to finish step 3. </p>
+        <!-- <p style="color:red"><b>NOTE:</b> The car needs to be awake when the process is started!</p> -->
+                <p>2. When the message <b>Tap NFC card!</b> is displayed here, you only have 30 seconds to finish step 3. </p>
         <p>3. Tap one of your two NFC key cards on the card reader located between the cup holder and the arm rest to authorize this process. 
-           There is NO message on the touchscreen displayed for this process until the step 3. was done.</p>
+           There is NO message on the touchscreen display in the car for this process until the step 3. was done.</p>
             <div style="text-align: center;"> 
                 <img src="./images/authorize-action.png" height="300"></img>
             </div>
-        <p>4. If there was no error in step 3. you should see a popup message on the touchscreen requesting a new phone key pairing. The message needs to be confirmed.
+        <p>4. If there was NO error in step 3. you should see a popup message on the touchscreen requesting a new phone key pairing. The message needs to be confirmed.
             Technically the message is not correct, because it's not a 'phone' key, but a BLE key. When complete, the key list contains a new key and you should see a 
             message on your Tesla app that a new key has been added to your car.</p>
-        <p>5. When you see a 'Verify' button here, the key list is retrieved from the car and verified if the public key was found in the list.</p>
+        <p>5. When the 30 seconds for step 3 have expired, you will see the <b>Verify</b> button here. Click the button to start the verification process,
+              which will retrieve the key list from the car and verify that the new public key was found in the list.</p>
         <p><b>NOTE:</b> It is recommended to rename the key to be able to distinguish your keys. Touch <b>Controls > Locks</b> on the touchscreen of your car.
-              In the key list, find the right key that you would like to rename  and touch its associated pen icon. Use the swipe gesture to scroll down the list.</p>
+              In the key list, find the right key that you would like to rename and touch its associated pen icon. Use the swipe gesture to scroll down the list.</p>
         <p>If you like to revoke this key from your car at a later time, do the same as described in the note to rename the key and touch its associated trash icon in the last step.</p>
         <a href="#" id="btnInstallKeys" class="ui-btn ui-corner-all ui-shadow ui-btn-icon-left ui-icon-tag" data-transition="flow"><span id="btnInstallKeysName"></span></a>
         <div style="text-align: center; width:100%">
@@ -178,14 +186,23 @@ if (isset($_GET['delete_token'])) {
     echo "<script> location.href='index.php'; </script>";
 } else if(isset($_POST["setAPI"])) {
     // Save API settings
+    $apidata = new stdClass();
+    $apidata->command_timeout = 0;
+    $apidata->connect_timeout = 0;
+    $apidata->tesla_debug = 0;
+    $apidata->ble_retries = 1;
     foreach ($_POST as $index => $entry) {
-        if ($index == "custombaseblecmd") {
-            $custom_baseblecmd = $entry;
-        } elseif ($index == "ble_repeat")  {
-            $ble_repeat = $entry;
+        if ($index == "command_timeout")  {
+            $apidata->command_timeout = $entry;
+        } elseif ($index == "connect_timeout")  {
+            $apidata->connect_timeout = $entry;
+        } elseif ($index == "tesla_debug")  {
+            $apidata->tesla_debug = (int)($entry == "on");
+        } elseif ($index == "ble_retries")  {
+            $apidata->ble_retries = $entry;
         } 
     }
-    write_api_data($custom_baseblecmd, $ble_repeat);
+    write_api_data($apidata);
     echo "<script> location.href='index.php'; </script>";
 } else if(isset($_POST["login"])) {
 	$output = json_decode(login($_POST["weburl"], $_POST["code_verifier"], $_POST["code_challenge"], $_POST["state"]));
@@ -287,11 +304,7 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
 
 <?php
 	$vehicles = tesla_summary();
-    read_api_data($baseblecmd, $ble_repeat);
-    if ($baseblecmd != $default_baseblecmd)
-        $custom_baseblecmd = $baseblecmd;
-    else
-        $custom_baseblecmd = "";
+    $apidata = read_api_data();
 ?>
 
 <div class="form-group">
@@ -366,7 +379,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
 <p><b>NOTE:</b> This plugin is using that utility to send commands to the vehicle via BLE. See <a href="https://wiki.loxberry.de/plugins/teslacmd/start#installation" target=”_blank”>important notes</a> for details.</p>
 
 <p style="color:green">
-    <b>You may modify the parameters, repeat the command, and create a key pair.</b>
+    <b>You may modify the parameters, and define how many times the command will be retried if execution has failed.</b>
 </p>
 <form method="post">
     <input type="hidden" name="setAPI" value="">
@@ -380,41 +393,51 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         </colgroup>
         <tr>
             <td>
-                <label for="dummy"><strong>Default BLE command</strong><br>
-                <span class="hint">Local Tesla control command. {vehicle_tag} tag will be replaced by VIN. {command} will be replaced with specific Tesla control command and params.</span></label>
+                <label for="command_timeout"><strong>Command timeout</strong><br>
+                <span class="hint">Set the timeout for commands sent to the vehicle via BLE in seconds. (default 5s).</span></label>
             </td>
             <td colspan=4>
                 <input
-                    type="text"
-                    id="dummy"
-                    name="dummy"
+                    type="number"
+                    min="1" max="120"
+                    id="command_timeout"
+                    name="command_timeout"
                     data-mini="true"
-                    value="<?=$default_baseblecmd; ?>"
-                    readonly="readonly">
+                    value="<?=$apidata->command_timeout; ?>">
             </td>
         </tr>
         <tr>
             <td>
-                <label for="custombaseblecmd"><strong>Custom BLE command</strong><br>
-                <span class="hint">Overwrite default BLE command or leave empty for default. Only single quotes allowed (no double quotes). Key name must contain '{vehicle_tag}' and 'private'.</span></label>
+                <label for="connect_timeout"><strong>Connect timeout</strong><br>
+                <span class="hint">Set the timeout for establishing initial connection via BLE with the vehicle in seconds. (default 20s).</span></label>
             </td>
             <td colspan=4>
                 <input
-                    type="text"
-                    id="custombaseblecmd"
-                    name="custombaseblecmd"
+                type="number"
+                    min="1" max="240"
+                    id="connect_timeout"
+                    name="connect_timeout"
                     data-mini="true"
-                    value="<?=$custom_baseblecmd; ?>">
+                    value="<?=$apidata->connect_timeout; ?>">
             </td>
         </tr>
         <tr>
             <td>
-                <strong>Repeat BLE command</strong><br>
-                <span class="hint">Repeat BLE commands in case an error is returned to increase reliability. Note: it may take longer to execute the command.</span>
+                <label for="tesla_debug"><strong>Command debug</strong><br>
+                <span class="hint">Enable debugging for tesla commands to get detailled information during troubleshooting.</span></label>
             </td>
-            <td><input type="radio" id="rep0" name="ble_repeat" data-mini="true" value="0" <?php if ($ble_repeat == "0") echo "checked"; ?>/><label for="rep0">No repeat</label></td>
-            <td><input type="radio" id="rep1" name="ble_repeat" data-mini="true" value="1" <?php if ($ble_repeat == "1") echo "checked"; ?>/><label for="rep1">Repeat once</label></td>
-            <td><input type="radio" id="rep2" name="ble_repeat" data-mini="true" value="2" <?php if ($ble_repeat == "2") echo "checked"; ?>/><label for="rep2">Repeat twice</label></td>
+            <td colspan=4>
+            <input type="checkbox" data-role="flipswitch" name="tesla_debug" id="tesla_debug" data-on-text="On" data-off-text="Off" data-wrapper-class="custom-label-flipswitch" <?php if ($apidata->tesla_debug == 1) echo 'checked=""'; ?>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <strong>Retry BLE command</strong><br>
+                <span class="hint">Define how often the BLE command is retried in case an error is returned to increase reliability. Note: it may take longer to execute the command.</span>
+            </td>
+            <td><input type="radio" id="ble_retries0" name="ble_retries" data-mini="true" value="0" <?php if ($apidata->ble_retries == "0") echo "checked"; ?>/><label for="ble_retries0">No retry</label></td>
+            <td><input type="radio" id="ble_retries1" name="ble_retries" data-mini="true" value="1" <?php if ($apidata->ble_retries == "1") echo "checked"; ?>/><label for="ble_retries1">Retry once</label></td>
+            <td><input type="radio" id="ble_retries2" name="ble_retries" data-mini="true" value="2" <?php if ($apidata->ble_retries == "2") echo "checked"; ?>/><label for="ble_retries2">Retry twice</label></td>
         </tr>
     </table>   
     <input type="submit" value="Save Vehicle Command API settings">
@@ -423,7 +446,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
 
 <script>
 
-// Get state from care via BLE popup (Question)
+// Get state from car via BLE popup (Question)
 function getState( vin ) {
 	$("#popupGetStateID").html(vin);
 	$("#btngetstate").attr("href", "javascript:getStateStop('" + vin + "');");
@@ -535,7 +558,7 @@ function createKeys( vin ) {
 	});
 }
 
-// Create key pair popup (Question)
+// Ask if keys should be installed in car (Question)
 function askInstallKeys( vin ) {
 	$("#popupInstallKeysID").html(vin);
     $("#btnInstallKeysName").html("Start");
@@ -544,8 +567,13 @@ function askInstallKeys( vin ) {
 	$("#popupInstallKeys").popup("open");
 }
 
-// Create key pair on Loxberry for vin
+var timer;
+var step1success;
+var step2success;
+
+// Install keys step 1 - Send keys to car
 function installKeysStep1( vin ) {
+    step1success = 0;
     $("#btnInstallKeysName").html("Waiting...");
 	$.ajax( { 
         url: "./sendkeytocar.php",
@@ -553,39 +581,65 @@ function installKeysStep1( vin ) {
         data: { ajax: 'installKeysStep1', keysID: vin },
         success: function(response) {
             var data = $.parseJSON(response);
-            if (data.status == 200) {
+            if (data.success == 1) {
+                step1success = 1;
                 $("#btnInstallKeysName").html(data.message);
+                $("#installKeysMessage").html("SUCCESS: keys were sent to vehicle.");
+                $("#btnInstallKeys").attr("href", "javascript:installKeysStep2('" + vin + "');");
+                console.log( "installKeysStep1 SUCCESS!");
             }
-            else {
+            if (data.success == 0) {
+                step1success = 0;
+                $("#btnInstallKeysName").html("Close");
                 $("#installKeysMessage").html("ERROR: " + data.message);
+                $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
+		        console.log( "installKeysStep1 ERROR: " + data.message);
             }
+            responseMessage = data.message;
         }
     } )
-	.fail(function( vin ) {
+	.fail(function( data ) {
         $("#btnInstallKeysName").html("Close");
+        $("#installKeysMessage").html("ERROR: " + data.message);
         $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
 		console.log( "installKeysStep1 Fail", vin );
 	})
 	.done(function( data ) {
-        var count = 30, timer = setInterval(function() {
-            count--;
-            $("#installKeysMessage").html("You have " + count + " seconds left to tap an NFC card.");
-            if(count == 0) {
-                clearInterval(timer);
-                $("#installKeysMessage").html("There is no time left to tap an NFC card anymore.");
-                $("#btnInstallKeysName").html("Verify");
-            } 
-        }, 1000);
-        $("#btnInstallKeys").attr("href", "javascript:installKeysStep2('" + vin + "');");
-		console.log( "installKeysStep1 Success: ", vin );
+        if (step1success) {
+            var count = 30;
+            timer = setInterval(function() {
+                count--;
+                $("#installKeysMessage").html("You have " + count + " seconds left to tap an NFC card.");
+                if(count == 0) {
+                    clearInterval(timer);
+                    $("#btnInstallKeysName").html("Verify");
+                    $("#installKeysMessage").html("There is no time left to tap an NFC card anymore.");
+                    $("#btnInstallKeys").attr("href", "javascript:installKeysStep2('" + vin + "');");
+                    console.log( "installKeysStep1 : timer finished, goto step 2, vin: " + vin );
+                } 
+            }, 1000);
+            $("#btnInstallKeys").attr("href", "javascript:installKeysStep1b('" + vin + "');");
+        }
+		console.log( "installKeysStep1 done: ", vin );
 	})
 	.always(function( vin ) {
 		console.log( "installKeysStep1 Finished" );
 	});
 }
 
-// Create key pair on Loxberry for vin
+function installKeysStep1b( vin ) {
+    clearInterval(timer);
+    $("#btnInstallKeysName").html("Verify");
+    $("#installKeysMessage").html("User has manually stopped the time to tap an NFC card.");
+    $("#btnInstallKeys").attr("href", "javascript:installKeysStep2('" + vin + "');");
+	console.log( "installKeysStep1b User has stopped: ", vin );
+}
+
+// Install keys step 2 - Verify if key was installed
 function installKeysStep2( vin ) {
+    var responseMessage;
+    step2success = 0;
+
     $("#btnInstallKeysName").html("Waiting...");
     $("#installKeysMessage").html("Getting key list from car to verify if public key was installed.");
 	$.ajax( { 
@@ -594,40 +648,56 @@ function installKeysStep2( vin ) {
         data: { ajax: 'installKeysStep2', keysID: vin },
         success: function(response) {
             var data = $.parseJSON(response);
-            if (data.status == 200) {
+            if (data.success == 1) {
+                step2success = 1;
                 $("#installKeysMessage").html("SUCCESS: " + data.message + "<br>You should rename the key, if not done already.");
+                console.log( "installKeysStep2 SUCCESS!");
             }
-            else {
-                $("#installKeysMessage").html("ERROR: " + data.message);
+            if (data.success == 0) {
+                step2success = 0;
+                $("#installKeysMessage").html("FAILURE: " + data.message);
+		        console.log( "installKeysStep2 FAILURE: " + data.message);
             }
+            $("#btnInstallKeysName").html("Close");
+            $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
+            responseMessage = data.message;
+        },
+        error: function(jqXHR) {
+            var data = $.parseJSON(jqXHR.responseText);
+            $("#installKeysMessage").html("FAILURE: " + data.message);
+            console.log( "installKeysStep2 ERROR! ", data.message + ", status " + data.status);
+            responseMessage = data.message;
         }
     } )
 	.fail(function( vin ) {
-        $("#btnInstallKeysName").html("Close");
-        $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
-		console.log( "installKeysStep2 Fail", vin );
+        $("#installKeysMessage").html("ERROR: " + responseMessage);
+        console.log( "installKeysStep2 fail ", responseMessage );
+        console.log( "installKeysStep2 vin ", vin );
 	})
 	.done(function( data ) {
-        $("#btnInstallKeysName").html("Close");
-        $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
-		console.log( "installKeysStep2 Success: ", vin );
+		console.log( "installKeysStep2 done: ", data );
 	})
 	.always(function( vin ) {
-		console.log( "installKeysStep2 Finished" );
+        $("#btnInstallKeysName").html("Close");
+        $("#btnInstallKeys").attr("href", "javascript:installKeysStep3('" + vin + "');");
+		console.log( "installKeysStep2 Finished: " + vin );
 	});
 }
 
-// Create key pair on Loxberry for vin
+// Install keys step 3 - Wait to close popup 
 function installKeysStep3( vin ) {
     $("#popupInstallKeys").popup("close");
-	console.log( "installKeysStep2 Success: ", vin );
+	console.log( "installKeysStep3 popup closed: ", vin );
     //location.replace(location.href);
 }
 
 </script>
 
 <p style="color:green">
-    <b>The following devices are using the Vehicle Command API.</b>
+    <b>The following devices are using the Vehicle Command API.</b>   
+</p>
+<p>In the first step you have to generate a public/private key pair by clicking on the "+" icon. In the next step the public key 
+   needs to be send to the vehicle by clicking on the blue vehicle icon that appears if a keypair has been found for that vehicle.  
 </p>
 <div class="form-group">
 	<table data-role="table" data-mode="columntoggle" data-filter="true" data-input="#filterTable-input" class="ui-body-d ui-shadow table-stripe ui-responsive" data-column-btn-text="Show columns">
@@ -747,4 +817,7 @@ function installKeysStep3( vin ) {
 	}
 	
 LBWeb::lbfooter();
+
+LOGINF("index.php: ==================== end of index.php ==================== ");
+
 ?>

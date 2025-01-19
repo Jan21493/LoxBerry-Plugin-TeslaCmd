@@ -1,8 +1,16 @@
 <?php
 
-require_once "loxberry_web.php";
-require_once "tesla_inc.php";
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - createkeys.php");
+
+LOGINF("createkeys.php: -------------------- start of createkeys.php -------------------- ");
+
 require_once "defines.php";
+require_once "tesla_inc.php";
 
 //
 // Query parameter 
@@ -22,14 +30,14 @@ if(!empty($_REQUEST["keysID"])) {
 } 
 
 LOGINF("createkeys: Creating a public private key pair for VIN: $vin.");
-$keygencmd = str_replace(VEHICLE_TAG, $vin, $keygencmd);
-$result_code = tesla_shell_exec( $keygencmd, $output, 0, false);
+$keygencmd = str_replace(VEHICLE_TAG, $vin, TESLA_KEYGEN_CMD);
+$result_code = tesla_shell_exec( $keygencmd, $output, 0, 0, false);
 	
 // raw output with full debugging (if enabled)
-LOGDEB("createkeys: -------------------------------------------------------------------------------------");
+LOGDEB("createkeys: output -------------------------------------------------------------------------------------");
 foreach($output as $key => $line) {
     LOGDEB("$line");
 }
-LOGDEB("createkeys: -------------------------------------------------------------------------------------");
+LOGINF("createkeys.php: ==================== end of createkeys.php ==================== ");
 
 ?>

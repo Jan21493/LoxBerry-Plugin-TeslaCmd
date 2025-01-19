@@ -1,8 +1,17 @@
 <?php
-require_once "loxberry_system.php";
+
+include_once "loxberry_system.php";
+include_once "loxberry_io.php";
+require_once "loxberry_log.php";
 require_once "loxberry_web.php";
-require_once "tesla_inc.php";
+
+$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+LOGSTART("Start Logging - queries.php");
+
+LOGINF("queries.php: -------------------- start of queries.php -------------------- ");
+
 require_once "defines.php";
+require_once "tesla_inc.php";
 
 $navbar[2]['active'] = True;
 
@@ -49,7 +58,7 @@ if($tokenvalid == "false") {
 <!-- Queries -->
 <?php
 	$vehicles = tesla_summary();
-    read_api_data($custom_baseblecmd, $ble_repeat);
+    $apidata = read_api_data();
 ?>
 
 <div class="wide">Function Blocks in Loxone Config</div>
@@ -79,14 +88,14 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
             if(isset($vehicle->energy_site_id)) {
                 $vid = strval($vehicle->energy_site_id);
                 $vehicle_tag = "&vid=$vid";
-                $tag = "{energy_site_id}";
+                $tag = ENERGY_SITE_ID;
                 $api = OWNERS_API;
             } else {
                 $vid = strval($vehicle->id);
                 $vin = strval($vehicle->vin);
                 $state = $vehicle->state;
                 $vehicle_tag = "&vin=$vin";
-                $tag = "{vehicle_tag}";
+                $tag = VEHICLE_TAG;
                 $api = getApiProtocol($vin);
             }
             foreach ($commands as $command => $attribute) {
@@ -212,7 +221,7 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
             $vid = strval($vehicle->energy_site_id);
             $vehicle_tag = "&vid=$vid";
             $info = $vehicle->site_name. " (VID: " . $vid . ")";
-            $tag = "{energy_site_id}";
+            $tag = ENERGY_SITE_ID;
             $api = OWNERS_API;
         } else {
             $vid = strval($vehicle->id);
@@ -223,7 +232,7 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
             else
                 $vehicle_tag = "&vid=$vid";                
             $info = $vehicle->display_name. " (VID: " . $vid . ", VIN: ".$vin . ")";
-            $tag = "{vehicle_tag}";
+            $tag = VEHICLE_TAG;
             $api = getApiProtocol($vin);
         }
 ?>
@@ -363,4 +372,7 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
 // token is valid
 }
 LBWeb::lbfooter();
+
+LOGINF("queries.php: ==================== end of queries.php ==================== ");
+
 ?>

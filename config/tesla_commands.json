@@ -147,7 +147,7 @@
         "DESC": "Fetch vehicle state over BLE.",
         "PARAM": {
             "category": "One of 'tire-pressure', 'parental-controls', 'closures', 'charge-schedule', 'drive', 'location', 'precondition-schedule', 'media', 'media-detail', 'software-update', 'charge', or 'climate'.",
-            "output": "The desired output format, either 'enums' or 'numbers'; defaults to enums."
+            "output": "The desired output format, either 'enums' or 'numbers'; defaults to 'enums' if omitted."
         }
     },
     "WAKE_UP": {
@@ -818,7 +818,7 @@
         "URI": "",
         "AUTH": false,
         "BLECMD": "add-key-request {public_key} {role} {form_factor}",
-        "DESC": "Request NFC-card approval for a enrolling PUBLIC_KEY with ROLE and FORM_FACTOR.",
+        "DESC": "Request for enrolling PUBLIC_KEY with ROLE and FORM_FACTOR. Works even when the vehicle is asleep. Requires NFC-card approval in vehicle.",
         "PARAM": {
             "public_key": "File containing public key (or corresponding private key).",
 			"role": "One of: 'owner', 'driver', 'fm' (fleet manager), 'vehicle_monitor', or 'charging_manager'.",

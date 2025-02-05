@@ -218,12 +218,19 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
     // list all available commands for each vehicle/car and energy site
     foreach ($vehicles as $vehicle) {
         if(isset($vehicle->energy_site_id)) {
+            $type = "energy site";
             $vid = strval($vehicle->energy_site_id);
             $vehicle_tag = "&vid=$vid";
-            $info = $vehicle->site_name. " (VID: " . $vid . ")";
+            $info = "Energy Site ".$vehicle->site_name. " (ID: " . $vid . ")";
             $tag = ENERGY_SITE_ID;
             $api = OWNERS_API;
+            if (($vehicle->resource_type == "solar") && ($vehicle->solar_type == "pv_panel")) {
+                $info .= ", Solar PV-Panel";
+            } else if (($vehicle->resource_type == "battery") && ($vehicle->battery_type == "ac_powerwall")){
+                $info .= ", AC Powerwall";
+            }
         } else {
+            $type = "vehicle";
             $vid = strval($vehicle->id);
             $vin = strval($vehicle->vin);
             $state = $vehicle->state;
@@ -239,7 +246,7 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
 
 <h3>Queries for <?=$info."\n"; ?></h3>
 
-<p>This vehicle is using the <span class="mono"><i><?=$apinames[$api]?></i></span> to retrieve and send information.
+<p>This <?php echo $type;?> is using the <span class="mono"><i><?=$apinames[$api]?></i></span> to retrieve and send information.
 <?php
         if ($api == BLE_PLUS_OWNERS_API)
             echo ' All commands that are send locally via BLE are tagged with the bluetooth symbol. <img src="./images/Bluetooth.svg" alt="BLE" height="15" ></img>';
@@ -304,7 +311,6 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
 <?php
 			}
 		}
-        if (isset($vehicle->vin)) {
 ?>
 
 <h4>Send commands</h4>
@@ -312,7 +318,7 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
 <?php
 			foreach ($commands as $command => $attribute) {
                 // Send commands: TYPE is "POST" AND it is a vehicle AND command is supported in selected API of vehicle AND tag is defined for command
-				if (($attribute->TYPE == "POST") && isset($vehicle->vin) && in_array($api, $attribute->API) && !empty($attribute->TAG)) {
+				if (($attribute->TYPE == "POST") && in_array($api, $attribute->API) && $tag == $attribute->TAG) {
 				    $command_get = "";
 					if (isset($commands->{strtoupper($command)}->PARAM)) {
 						foreach ($commands->{strtoupper($command)}->PARAM as $param => $param_desc) {
@@ -354,7 +360,6 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
 <?php
 				}
 			}
-		}
     // foreach vehicles
 	} 
 ?>

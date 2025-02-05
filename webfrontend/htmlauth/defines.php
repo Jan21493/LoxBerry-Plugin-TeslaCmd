@@ -1,7 +1,7 @@
 <?php
 define('BASEURL',           "https://owner-api.teslamotors.com/"); 
 define('LOGINFILE',         "$lbpconfigdir/sessiondata.json"); 
-// to be deleted in final version - define('FAKEFILE', "$lbpconfigdir/fakedata.json"); 
+// to be deleted in final version - define('FAKEFILE',          "$lbpconfigdir/fakedata.json"); 
 define('APIFILE',           "$lbpconfigdir/apidata.json"); 
 define('COMMANDFILE',       "$lbpconfigdir/tesla_commands.json"); 
 define('MQTTTOPIC',         "${lbpplugindir}"); 

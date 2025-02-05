@@ -9,6 +9,7 @@ $log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
 LOGSTART("Start Logging - testqueries.php");
 
 LOGINF("testqueries.php: -------------------- start of testqueries.php -------------------- ");
+LOGDEB("send.php: Source IP-address: ".$_SERVER['REMOTE_ADDR']);
 
 require_once "defines.php";
 require_once "tesla_inc.php";
@@ -124,9 +125,17 @@ if($tokenvalid == "false") {
 	// foreach vehicle
 	foreach ($vehicles as $vehicle) {
 		if(isset($vehicle->energy_site_id)) {
-			$tag = strval($vehicle->energy_site_id);
-			$name = $vehicle->site_name;
-            $info = "VID: ".$tag;
+			$tag = number_format(strval($vehicle->energy_site_id), 0, ',', '');
+			if ($vehicle->site_name != "")
+				$name = "Energy site ".$vehicle->site_name;
+			else
+				$name = "Energy site ID $tag";
+            $info = "ID: ".$tag;
+			if (($vehicle->resource_type == "solar") && ($vehicle->solar_type == "pv_panel")) {
+				$info .= ", Solar PV-Panel ".number_format($vehicle->solar_power, 0, ',', '.')."Wp";
+			} else if (($vehicle->resource_type == "battery") && ($vehicle->battery_type == "ac_powerwall")) {
+				$info .= ", AC Powerwall, ".round($vehicle->total_pack_energy / 1000, 2)."kWh, SoC ".round($vehicle->percentage_charged, 1)."%";
+			}
 		} else {
 			$tag = strval($vehicle->id);
 			$name = $vehicle->display_name;

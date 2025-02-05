@@ -9,7 +9,8 @@ require_once "loxberry_web.php";
 $log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
 LOGSTART("Start Logging - send.php");
 
-LOGINF("send.php: -------------------- start of send.php -------------------- ");
+LOGOK("send.php: -------------------- start of send.php -------------------- ");
+LOGINF("send.php: Source IP-address: ".$_SERVER['REMOTE_ADDR']);
 
 require_once "defines.php";
 require_once "tesla_inc.php";
@@ -89,6 +90,7 @@ if (!empty($vin) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP
 if(isset($command)) {
 	$command_post = [];
 	$command_post_print = "";
+	$command_get_params = "";
 	$command_output = "";
 	$command_error = false;
 
@@ -121,6 +123,9 @@ if(isset($command)) {
 					// need to send all optional parameters even if empty in case another (non-empty) parameter is following 
 					$command_post += array("$param" => $value);
 					$command_post_print = $command_post_print.", $param: ".$value;
+					if ($command_get_params != "")
+						$command_get_params += "&";
+					$command_get_params += "$param=$value";
 					if ($optional) 
 						$blecmd = str_replace("[".$param."]", $value, $blecmd);
 					else
@@ -155,9 +160,17 @@ if(isset($command)) {
 			// select API - either owner's api or vehicle command via ble 
 			if ($api == OWNERS_API || empty($blecmd)) {
 				if (empty($vin)) {
-					$command_output =  tesla_query( $vid, $action, $command_post, $force );
-					LOGOK("send.php: ID: $vid, no vin, action: $action".$command_post_print.($force ? ", force: $force." : ", no force."));
+					if ($command->TYPE == "GET") {
+						// for GET requests the parameters are provided with the URI
+						$command_output =  tesla_query( $vid, $action, $command_get_params, $force );
+						LOGOK("send.php: ID: $vid, no vin, GET action: $action".$command_post_print.($force ? ", force: $force." : ", no force."));
+					} else {
+						// for POST requests the parameters are provided in the HTTP header
+						$command_output =  tesla_query( $vid, $action, $command_post, $force );
+						LOGOK("send.php: ID: $vid, no vin, POST action: $action".$command_post_print.($force ? ", force: $force." : ", no force."));
+					}
 				} else {
+					// for vehicles there are no GET commands with parameters
 					$command_output =  tesla_query( $vin, $action, $command_post, $force );
 					LOGOK("send.php: VIN: $vin, (vid: $vid), action: $action".$command_post_print.($force ? ", force: $force." : ", no force."));				
 				}

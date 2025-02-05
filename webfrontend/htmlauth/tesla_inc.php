@@ -122,9 +122,9 @@ function tesla_summary()
 		return $returndata;
 	}
 } 
-
-/* to be deleted in final version - 
-function tesla_summary2()
+/*
+// to be deleted in final version - 
+function tesla_summary()
 {
 	// Function to get car summary plus fake entries
 	LOGINF("Get Tesla product summary.");
@@ -206,9 +206,12 @@ function tesla_check_parameter($action, $values)
 }
 
 
-function tesla_query( $VID, $action, $POST=false, $force=false )
+function tesla_query( $VID, $action, $params=false, $force=false )
 {
 	// Function to send query to tesla api
+
+	// for GET queries: $params are coded as URI with & between params, e.g. param1=value1&param2=value2
+	// for POST queries: $params are coded as array with "param" => value
 		
 	global $commands;
 	$action = strtoupper($action);
@@ -218,13 +221,16 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 	$uri = str_replace("{energy_site_id}", "$VID", $uri);
 	$timeout = 10;
 
-	LOGINF("Query: $action: start");
+	LOGINF("tesla_query: $action: start");
 
 	while($timeout > -1) {
 		if($type == "GET") {
 			//GET
 			LOGDEB("tesla_query: $type: $uri");
-			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, false ));
+			//$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, false ));
+			
+			// Reformat output from 'curl' command. Add params to URI for GET requests
+			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri."?".$params, false ));
 			$data = json_decode($rawdata);
 			$data->response->{"sentAtTimeLox"} = epoch2lox();
 			$data->response->{"sentAtTimeISO"} = currtime();
@@ -278,7 +284,8 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 		} else {
 			//POST
 			LOGDEB("tesla_query: $type: $uri");
-			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, $POST, true));
+			// Reformat output from 'curl' command. Add params to HTTP header for POST requests (send to function as array)
+			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, $params, true));
 			$data = json_decode($rawdata);
 			
 			if (!empty($data->error)) {
@@ -307,7 +314,7 @@ function tesla_query( $VID, $action, $POST=false, $force=false )
 					break;
 				}
 			} else {
-				LOGOK("Query: $action: success");
+				LOGOK("tesla_query: $action: success");
 				break;
 			}
 		}
@@ -558,7 +565,7 @@ function pretty_print($json_data)
 
 function mqttpublishdata($mqtt, $data, $mqttsubtopic)
 {
-	// LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic - called");
+	//LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic ");
 	// if data is an object or array, then call this function for each element
 	if (is_object($data) or is_array($data)) {
 		$count = 0;
@@ -570,7 +577,7 @@ function mqttpublishdata($mqtt, $data, $mqttsubtopic)
 		if ($count == 0) {
 			// no value, e.g. empty array. Some commands e.g. state charge have empty objects. Set to NULL (needs to be tested!)
 			$mqtt->publish(MQTTTOPIC . "$mqttsubtopic", "", 0, 1);
-			LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic: NULL");
+			LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic: NULL");
 		} 
 	} else {
 		if (is_array($data)) {
@@ -587,7 +594,7 @@ function mqttpublishdata($mqtt, $data, $mqttsubtopic)
 			$data = "NULL";
 		}
 		$mqtt->publish(MQTTTOPIC . "$mqttsubtopic", $data, 0, 1);
-		LOGDEB("mqttpublishdata: " . MQTTTOPIC . "$mqttsubtopic: $data");
+		LOGDEB("mqttpublish: " . MQTTTOPIC . "$mqttsubtopic: $data");
 	}
 }
 
@@ -603,17 +610,17 @@ function mqttpublish($data, $mqttsubtopic = "")
 	$mqtt = new Bluerhinos\phpMQTT($creds['brokerhost'], $creds['brokerport'], $client_id);
 
 	if ($mqtt->connect(true, NULL, $creds['brokeruser'], $creds['brokerpass'])) {
-		LOGDEB("mqttpublish: MQTT connection successful, topic: ".MQTTTOPIC);
-		LOGOK("MQTT: Connection successful.");
+
+		LOGINF("mqttpublish: start of topic: " . MQTTTOPIC . ", MQTT broker: ".$creds['brokerhost'].":".$creds['brokerport']);
 		// publish all data
 		mqttpublishdata($mqtt, $data, $mqttsubtopic);
 
 		//[x] Query timestamp added, changed to mqtt_timestamp
 		$mqtt->publish(MQTTTOPIC . "/mqtt_timestamp", epoch2lox(time()), 0, 1);
 		LOGDEB("mqttpublish: " . MQTTTOPIC . "/mqtt_timestamp: " . epoch2lox(time()));
+		LOGOK("mqttpublish: MQTT connection successful, topic: ".MQTTTOPIC);
 		$mqtt->close();
 	} else {
-		LOGDEB("mqttpublish: MQTT connection failed");
 		LOGERR("MQTT: Connection failed.");
 	}
 }
@@ -686,7 +693,7 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 15,
 	// Function to execute shell command
 	//[ ] If Timeout, restart apache server: sudo systemctl restart apache2
 	
-	LOGINF("tesla_shell_exec: Start to executing a shell command ...");
+	LOGINF("tesla_shell_exec: Start executing a shell command ...");
 	$command .= " 2>&1";
 	if( !empty($command) ) {
 		LOGDEB("tesla_shell_exec: command: $command");

@@ -298,22 +298,28 @@ if($tokenvalid == "true") {
 as a successor of the <a href="https://tesla-api.timdorr.com/">(inofficial) Owner's API</a>. 
 Pre-2021 model S and X vehicles do not support this new protocol, but all other models will be shifted to the new protocol in 2024.</p> 
 
-<p style="color:green">
-    <b>The following devices are found in your Tesla account and requested via <?php echo $apinames[OWNERS_API]; ?>.</b>
-</p>
-
 <?php
 	$vehicles = tesla_summary();
     $apidata = read_api_data();
 ?>
-
-<div class="form-group">
+<style>
+    .table-ui-title {
+        font-size: 1.4em;
+        margin: 2px 0px 2px 5px;
+        padding: 0px 0px 0px 0px;
+        outline: 0 !important;
+        font-weight: bold;
+}
+</style>
+<div class="form-group" id="vehicleTable">
+<div class="table-ui-title">Vehicles and energy sites in your Tesla account - via <?php echo $apinames[OWNERS_API]; ?><span id="colTogglePlaceholder"></span></div>
 	<table data-role="table" data-mode="columntoggle" data-filter="true" data-input="#filterTable-input" class="ui-body-d ui-shadow table-stripe ui-responsive" data-column-btn-text="Show columns">
 		<thead>
 		<tr class="ui-bar-d">
+        <th data-priority="1">TYPE</th>
             <th data-priority="1">ID</th>
-            <th data-priority="5">Access Type</th>
-			<th data-priority="2">VIN</th>
+            <th data-priority="5">Access / Ressource Type</th>
+			<th data-priority="2">VIN / Energy Site Info</th>
 			<th data-priority="2">Model</th>
 			<th data-priority="2">Model Year</th>
 			<th data-priority="4">Name</th>
@@ -331,6 +337,7 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
 
 ?>
 			<tr>
+                <td>Vehicle</td>
                 <td><?php echo $vehicle->id; ?></td>
 				<td><?php echo $vehicle->access_type; ?></td>
 				<td><?php echo $vehicle->vin; ?></td>
@@ -346,9 +353,22 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
         } else {
 ?>    
 			<tr>
-                <td><?php echo $vehicle->energy_site_id; ?></td>
-				<td><?php echo $vehicle->access_type; ?></td>
-				<td>-</td>
+                <td>Energy Site</td>
+                <td><?php echo number_format($vehicle->energy_site_id, 0, ',', ''); ?></td>
+                <td><?php 
+                    if (($vehicle->resource_type == "solar") && ($vehicle->solar_type == "pv_panel")) {
+                        echo "Solar PV-Panel";
+                    } else if (($vehicle->resource_type == "battery") && ($vehicle->battery_type == "ac_powerwall")) {
+                        echo "AC Powerwall";
+                    }
+                 ?></td>
+				<td><?php 
+                    if (($vehicle->resource_type == "solar") && ($vehicle->solar_type == "pv_panel")) {
+                        echo round($vehicle->solar_power/1000, 1)."kWp";
+                    } else if (($vehicle->resource_type == "battery") && ($vehicle->battery_type == "ac_powerwall")){
+                        echo "Cap. ".round($vehicle->total_pack_energy / 1000, 2)."kWh, SoC ".round($vehicle->percentage_charged, 1)."%";
+                    }
+                 ?></td>
 				<td>-</td>
 				<td>-</td>
 				<td><?php echo $vehicle->site_name; ?></td>
@@ -361,7 +381,6 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
     // foreach vehicle
 	}
 ?>
-
 		</tbody>
 		</table>
     </div>
@@ -369,6 +388,12 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
 <?php
 	}
 ?>
+
+<script type="text/javascript">
+    $(document).on("tablecreate", "#vehicleTable", function(){
+    $(".ui-table-columntoggle-btn").appendTo("#colTogglePlaceholder");
+});
+</script>
 <br><br>
 <!-- Vehicle Command API -->
 <div class="wide">Vehicle Command API settings </div>

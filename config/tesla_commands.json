@@ -841,7 +841,7 @@
         "URI": "api/1/energy_sites/{energy_site_id}/site_info",
         "AUTH": true,
         "BLECMD": "",
-        "DESC": "Retrieves general system information."
+        "DESC": "Returns information about the site. Things like assets (has solar, etc), settings (backup reserve, etc), and features (storm_mode_capable, etc)."
     },
     "SITE_STATUS": {
         "API": [0],
@@ -869,5 +869,126 @@
         "AUTH": true,
         "BLECMD": "",
         "DESC": "Retrieves the user defined Utility Rate Plan used for Time-Based Control mode. It looks like this endpoint is updated every 30 minutes."
+    },
+    "BACKUP": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/backup",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Adjust the site's backup reserve.",
+        "PARAM": {
+            "backup_reserve_percent": "The desired backup reserve percent as number."
+        }
+    },
+    "BACKUP_HISTORY": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/calendar_history",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Returns the backup (off-grid) event history of the site in duration of seconds.",
+        "PARAM": {
+            "kind": "The kind of history to be requested. 'backup' and 'energy' are supported.",
+            "end_date": "End date of the window to retrieve backup events in RFC3339 format. i.e. 2023-01-01T00:00:00-08:00",
+            "period": "Period of the window to retrieve backup events. This can be day, week, month, year, lifetime and should align with the window requested.",
+            "start_date": "Start date of the window to retrieve backup events in RFC3339 format. i.e. 2023-01-01T00:00:00-08:00",
+            "time_zone": "Timezone of the requested window in IANA name format. i.e. 'America/Los_Angeles'"
+        }
+    },
+    "CHARGE_HISTORY": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/telemetry_history",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Returns the charging history of a wall connector.",
+        "PARAM": {
+            "kind": "The kind of history to be requested. 'charge' is the only supported kind at this time.",
+            "end_date": "End date of the window to retrieve backup events in RFC3339 format. i.e. 2023-01-01T00:00:00-08:00",
+            "start_date": "Start date of the window to retrieve backup events in RFC3339 format. i.e. 2023-01-01T00:00:00-08:00",
+            "time_zone": "Timezone of the requested window in IANA name format. i.e. 'America/Los_Angeles'"
+        }
+    },
+    "ENERGY_HISTORY": {
+        "API": [0],
+        "TYPE": "GET",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/calendar_history",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Returns the energy measurements of the site, aggregated to the requested period.",
+        "PARAM": {
+            "kind": "The kind of history to be requested. 'backup' and 'energy' are supported.",
+            "end_date": "End date of the window to retrieve backup events in RFC3339 format. i.e. 2023-01-01T00:00:00-08:00",
+            "period": "Period of the window to retrieve backup events. This can be day, week, month, year, lifetime and should align with the window requested.",
+            "start_date": "Start date of the window to retrieve backup events in RFC3339 format. i.e. 2023-01-01T00:00:00-08:00",
+            "time_zone": "Timezone of the requested window in IANA name format. i.e. 'America/Los_Angeles'"
+        }
+    },
+    "GRID_IMPORT_EXPORT": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/grid_import_export",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Allow/disallow charging from the grid and exporting energy to the grid.",
+        "PARAM": {
+            "customer_preferred_export_rule": "The desired behavior for grid exporting. The available options are battery_ok, pv_only, and never.",
+            "disallow_charge_from_grid_with_solar_installed": "The desired behavior towards importing from the grid. Charging from the grid is disabled when set to true and enabled when set to false."
+         }
+    },
+    "OFF_GRID_VEHICLE_CHARGING_RESERVE": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/off_grid_vehicle_charging_reserve",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Adjust the site's off-grid vehicle charging backup reserve.",
+        "PARAM": {
+            "off_grid_vehicle_charging_reserve_percent": "The desired off grid vehicle charging reserve percent."
+        }
+    },
+    "OPERATION": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/operation",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Use autonomous for time-based control and self_consumption for self-powered mode.",
+        "PARAM": {
+            "default_real_mode": "The desired operation mode. Use autonomous for time-based control and self_consumption for self-powered mode."
+        }
+    },
+    "STORM_MODE": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/storm_mode",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Update storm watch participation.",
+        "PARAM": {
+            "enabled": "The storm mode participation value to set. Set 'true' to turn on, 'false' to turn it off."
+        }
+    },
+    "TIME_OF_USE_SETTINGS": {
+        "API": [0],
+        "TYPE": "POST",
+        "TAG": "{energy_site_id}",
+        "URI": "api/1/energy_sites/{energy_site_id}/time_of_use_settings",
+        "AUTH": true,
+        "BLECMD": "",
+        "DESC": "Update the time of use settings for the energy site.",
+        "PARAM": {
+            "tou_settings.tariff_content_v2": "Tariff structure as explained in https://developer.tesla.com/docs/fleet-api/endpoints/energy#time-of-use-settings."
+        }
     }
 }
+

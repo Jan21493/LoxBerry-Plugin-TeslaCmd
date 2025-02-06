@@ -120,8 +120,12 @@ if(isset($command)) {
 					if (!empty($value)) {
 						LOGDEB("send.php: parameter \"$param\"=\"$value\", description: $param_desc");
 					}
-					// need to send all optional parameters even if empty in case another (non-empty) parameter is following 
-					$command_post += array("$param" => $value);
+					// need to send all optional parameters even if empty in case another (non-empty) parameter is following
+					// special case - integer value needs to be send
+					if ($param =="backup_reserve_percent")
+						$command_post += array("$param" => floatval($value));
+					else
+						$command_post += array("$param" => $value); 
 					$command_post_print = $command_post_print.", $param: ".$value;
 					if ($command_get_params != "")
 						$command_get_params += "&";

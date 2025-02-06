@@ -150,8 +150,7 @@ function tesla_summary()
 		}
 		return $returndata;
 	}
-} 
-*/
+} */
 
 // TODO: Check if function needed
 function tesla_checktoken()
@@ -636,23 +635,29 @@ function tesla_curl_send( $url, $payload, $post=false )
 
 	if( !empty($payload) ) {
 		$payload = json_encode ( $payload );
-		LOGDEB("tesla_curl_send: Payload: $payload");
 	} else {
 		$payload = "";
 	}
 	
 	$header = [ ];
-	
+
 	if( !empty($token) ) {
-		LOGDEB("tesla_curl_send: Token given");
+		LOGINF("tesla_curl_send: curl started, Token given");
 		array_push( $header, "Authorization: Bearer $token" );
+		LOGDEB("tesla_curl_send: curl options: -H \"Authorization: Bearer *****\" \\");
+	} else {
+		LOGINF("tesla_curl_send: curl started, no Token");
 	}
 	
 	if($post==true) {
 		array_push( $header, "Content-Type: application/json;charset=UTF-8" );
+		LOGDEB("tesla_curl_send: curl options: -H 'Content-Type: application/json;charset=UTF-8' \\");
 		array_push( $header, "Content-Length: " . strlen($payload) );
+		LOGDEB("tesla_curl_send: curl options: -H 'Content-Length: ".strlen($payload)."' \\");
 		curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+		LOGDEB("tesla_curl_send: curl options: -X POST \\");
 		curl_setopt($curl, CURLOPT_POSTFIELDS, $payload);
+		LOGDEB("tesla_curl_send: curl options: --data '$payload' \\");
 	}
 	
 	//cURL connection timeout 5 seconds
@@ -662,22 +667,20 @@ function tesla_curl_send( $url, $payload, $post=false )
 	curl_setopt($curl, CURLOPT_TIMEOUT, 10);
 
 	curl_setopt($curl, CURLOPT_URL, $url);
+	LOGDEB("tesla_curl_send: curl options: -i '$url'");
 	curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
 	curl_setopt($curl, CURLOPT_HTTPHEADER, $header );
 
-	LOGDEB("tesla_curl_send: curl_send URL: $url");
 	$response = curl_exec($curl);
 
 	//Did an error occur? If so, dump it out.
-	if(curl_errno($curl)){
+	if(curl_errno($curl))
 		LOGERR("tesla_curl_send: ".curl_error($curl));
-	}
 
-	LOGDEB("tesla_curl_send: curl_exec finished");
 	// Debugging
 	$crlinf = curl_getinfo($curl);
-	LOGDEB("tesla_curl_send: Status: " . $crlinf['http_code']);
-	
+	LOGINF("tesla_curl_send: curl finished with status: ". $crlinf['http_code']);
+
 	return $response;
 }
 

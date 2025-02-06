@@ -366,7 +366,7 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
                     if (($vehicle->resource_type == "solar") && ($vehicle->solar_type == "pv_panel")) {
                         echo round($vehicle->solar_power/1000, 1)."kWp";
                     } else if (($vehicle->resource_type == "battery") && ($vehicle->battery_type == "ac_powerwall")){
-                        echo "Cap. ".round($vehicle->total_pack_energy / 1000, 2)."kWh, SoC ".round($vehicle->percentage_charged, 1)."%";
+                        echo "Capacity ".round($vehicle->total_pack_energy / 1000, 2)."kWh, SoC ".round($vehicle->percentage_charged, 1)."%";
                     }
                  ?></td>
 				<td>-</td>

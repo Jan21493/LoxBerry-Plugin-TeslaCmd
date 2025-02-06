@@ -879,7 +879,7 @@
         "BLECMD": "",
         "DESC": "Adjust the site's backup reserve.",
         "PARAM": {
-            "backup_reserve_percent": "The desired backup reserve percent as number."
+            "backup_reserve_percent": "The desired backup reserve percent as number (e.g. 20 or 10.5)."
         }
     },
     "BACKUP_HISTORY": {

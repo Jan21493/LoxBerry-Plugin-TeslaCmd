@@ -306,7 +306,10 @@ if($tokenvalid == "false") {
 					} else {
 						// energy site or vehicle, but no vin in mapping table
 						$uri = str_replace($command->TAG, "$vid", $uri);
-						LOGDEB("testqueries: energy site or vehicle, but no VIN found, using ID: ".$vid.", VIN: ".$vin);
+						if ($command->TAG == "{energy_site_id}")
+							LOGDEB("testqueries: energy site, using ID: ".$vid);
+						else
+							LOGDEB("testqueries: vehicle, but no VIN found, using ID: ".$vid.", VIN: ".$vin);
 					}
 				} else {
 					$command_output =  $command_output."Parameter 'VID' is missing! The ID of the vehicle.\n";
@@ -319,10 +322,14 @@ if($tokenvalid == "false") {
 						$value = $_REQUEST["$param"];
 						$optional = strpos($blecmd, "[".$param."]");
 						if (!empty($value) || $optional) {
-							$command_post += array("$param" => $value);
+							// special case - integer value needs to be send
+							if ($param =="backup_reserve_percent")
+								$command_post += array("$param" => floatval($value));
+							else
+								$command_post += array("$param" => $value);
 							// optional parameters with empty value are skipped
 							if (!$optional || ($value != "")) {
-								$command_post_print .= ", $param: ".$value;
+								$command_post_print .= ", \"$param\": ".$value;
 								$command_get = $command_get."&$param=".$value;
 							} 
 							// replace param with value for BLECMD - params that are required are in curly brackets, params that are optional are in square brackets
@@ -343,20 +350,20 @@ if($tokenvalid == "false") {
 					if (getApiProtocol($vin) == OWNERS_API || empty($blecmd)) {
 						LOGDEB("testqueries: sending command via Internet (Owner's API) ... ");
 						if (empty($vin)) {
-							$commandoutput = tesla_query( $vid, $action, $command_post, $force );
 							LOGOK("testqueries: using ID: $vid, action: $action ".$command_post_print.($force ? ", force: $force" : ""));
+							$commandoutput = tesla_query( $vid, $action, $command_post, $force );
 						} else {
-							$commandoutput = tesla_query( $vin, $action, $command_post, $force );
 							LOGOK("testqueries: using VIN: $vin (ID: $vid), action: $action ".$command_post_print.($force ? ", force: $force" : ""));
+							$commandoutput = tesla_query( $vin, $action, $command_post, $force );
 						}
 					} else {
 						LOGDEB("testqueries: sending command via BLE ... ");
 						if (empty($vin)) {
-							$commandoutput = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $apidata->ble_retries, $apidata->lock_timeout, $force );
 							LOGOK("testqueries: using ID: $vid, action: $action, basecmd: $baseblecmd, command: $blecmd".($force ? ", force: $force" : ""));
+							$commandoutput = tesla_ble_query( $vid, $action, $baseblecmd, $blecmd, $apidata->ble_retries, $apidata->lock_timeout, $force );
 						} else {
-							$commandoutput = tesla_ble_query( $vin, $action, $baseblecmd, $blecmd, $apidata->ble_retries, $apidata->lock_timeout, $force );
 							LOGOK("testqueries: using VIN: $vin (ID: $vid), action: $action, basecmd: $baseblecmd, command: $blecmd".($force ? ", force: $force" : ""));
+							$commandoutput = tesla_ble_query( $vin, $action, $baseblecmd, $blecmd, $apidata->ble_retries, $apidata->lock_timeout, $force );
 						}
 					}
 				}

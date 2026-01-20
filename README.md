@@ -15,7 +15,7 @@ Since version 0.5 of this plugin, the proper API is choosen automatically.
 All data from the vehicle is transferred back to the Loxone Miniserver via MQTT. The subscription for this is `teslacmd/#` and is automatically registered in the Loxberry MQTT gateway plugin.
 
 > [!NOTE]
-> This plugin uses modified utilities that were provided by Tesla. See [README.md](https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility) for details.
+> This plugin uses modified utilities to the ones that were provided by Tesla. See [README.md](https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility) for details about purpose and parameters.
 
 The plugin contains binary files for the utilities 'tesla-control', 'tesla-keygen', and 'tesla-scan' for Raspberry PI 32- and 64-bit only. For all other platforms you have to follow the instructions provided by Telsa to install 'go' and compile and build the two utilities. You may choose to compile and build the two utilities on a Raspberry PI if you have security concerns or if Tesla has provided a new version of the SDK.
 
@@ -33,6 +33,10 @@ See 'Queries' and 'Test Queries' tabs for description and parmeters for each com
 
 ## Instructions to install tools and other stuff - not required for a standard installation
 
+Please follow the installation described at [TeslaCommand Plugin Installation](https://wiki.loxberry.de/plugins/teslacmd/start#installation).
+
+The following notes may be outdated and should only be used if the link from above does not work anymore.
+
 ```
 Install vehicle command API on Raspberry (I've not tested steps 3.-5. You may have to use 'su' to switch to the root user instead of 'sudo')
 
@@ -48,49 +52,74 @@ sudo apt-get install git
 
 mkdir ~/golang
 cd ~/golang
-
-for Raspberry PI 32-Bit:
-wget https://go.dev/dl/go1.22.5.linux-armv6l.tar.gz
-sudo tar -C /usr/local -xzf go1.22.5.linux-armv6l.tar.gz
-
-for Raspberry PI 64-Bit:
-wget https://go.dev/dl/go1.22.5.linux-arm64.tar.gz
-sudo tar -C /usr/local -xzf go1.22.5.linux-arm64.tar.gz
+# on 32-Bit Linux ARM
+wget https://go.dev/dl/go1.23.2.linux-armv6l.tar.gz
+tar -xzf go1.23.2.linux-armv6l.tar.gz
+# on 64-Bit Linux ARM
+wget https://go.dev/dl/go1.23.2.linux-arm64.tar.gz
+tar -xzf go1.23.2.linux-arm64.tar.gz
+#
+export PATH=$PATH:/opt/loxberry/golang/go/bin
+# Verify that Go is working
+go version
 
 for all other platforms:
 see help files in golang
 
-export PATH=$PATH:/usr/local/go/bin
+5. Install the Tesla Vehicle Command SDK
 
-5. Build the Tesla Vehicle Command SDK
-
+# install GIT as superuser - only if required
+# su
+# apt-get install git
+# exit
 cd ~
-git clone https://github.com/teslamotors/vehicle-command.git
+# git clone https://github.com/teslamotors/vehicle-command.git
+git clone https://github.com/jan21493/vehicle-command.git
+# git clone https://github.com/rigado/ble.git
+git clone --single-branch --branch local-enhancements https://github.com/Jan21493/ble
 cd vehicle-command/
-sudo env "PATH=$PATH" go get ./...
+# if not set yet: export PATH=$PATH:/opt/loxberry/golang/go/bin
+go get ./...
+ 
+6. Build the command line tools from the Tesla Vehicle Command SDK
 
+# set environment variables that are used for version information
+HWINFO=$(cat /sys/firmware/devicetree/base/model|xargs --null printf "%s")
+HWARCH=$(uname -m)
+VCVERSION=$(git rev-parse --short HEAD)
+TODAY=$(date "+%a, %d %b %Y %T")
+echo "Hardware info: "$HWINFO
+echo "Hardware architecure: "$HWARCH
+echo "Vehicle-Command SDK version: "$VCVERSION
+echo "Date: "$TODAY
+ 
+# build tesla-control utility - may take a while
 cd cmd/tesla-control
-sudo env "PATH=$PATH" go build ./...
-sudo mv tesla-keygen /usr/local/bin/
-
+go build -ldflags "-X 'main.version=$VCVERSION' -X 'main.hwinfo=$HWINFO' -X 'main.hwarch=$HWARCH' -X 'main.today=$TODAY'"  ./...
+ 
+# build tesla-scan utility - may take a while
+cd ../tesla-scan
+go build -ldflags "-X 'main.version=$VCVERSION' -X 'main.hwinfo=$HWINFO' -X 'main.hwarch=$HWARCH' -X 'main.today=$TODAY'"  ./...
+ 
+# build tesla-keygen utility - may take a while
 cd ../tesla-keygen
-sudo env "PATH=$PATH" go build ./...
-sudo mv tesla-keygen /usr/local/bin/
+go build ./...
+cd ..
 
-Go to step 7
+7. Copy binary files (Raspberry PI, 64-bit) to local local bin directory as root user 
+   and add rights to 'tesla-control' and 'tesla-scan' executable to allow BLE commands
 
-6. Copy binary files (Raspberry PI, 64-bit) to local local bin directory
+# execute as Superuser/root
+su
+cd /opt/loxberry
+mv ./vehicle-command/cmd/tesla-control/tesla-control /usr/local/bin/
+setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
+mv ./vehicle-command/cmd/tesla-keygen/tesla-keygen /usr/local/bin/
+mv ./vehicle-command/cmd/tesla-scan/tesla-scan /usr/local/bin/
+setcap 'cap_net_admin=eip' /usr/local/bin/tesla-scan
+exit
 
-loxberry@raspilab:~ $ cp /opt/loxberry/bin/plugins/teslacmd/tesla-keygen /usr/local/bin/
-loxberry@raspilab:~ $ cp /opt/loxberry/bin/plugins/teslacmd/tesla-control /usr/local/bin/
-
-7. Switch to root user with 'su' command
-
-8. Add rights to 'tesla-control' executable to allow BLE commands
-
-root@myloxberry:/opt/loxberry# setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
-
-9. Add following lines to /etc/sudoers.d/lbdefaults to allow start of bluetooth daemon by loxberry user (may not be required?)
+8. (optional) Add following lines to /etc/sudoers.d/lbdefaults to allow start of bluetooth daemon by loxberry user
 
 /etc/sudoers.d# vi /etc/sudoers.d/lbdefaults
 
@@ -98,27 +127,31 @@ loxberry ALL = NOPASSWD: /bin/systemctl start bluetooth.service
 loxberry ALL = NOPASSWD: /bin/systemctl restart bluetooth.service
 loxberry ALL = NOPASSWD: /bin/systemctl stop bluetooth.service
 
-10. Turn on Bluetooth via 'dietpi-config' (menu 'advanced options')
+9. Turn on Bluetooth via 'dietpi-config' (menu 'advanced options')
 
-11. Reboot your Loxberry
+IMPORTANT: the bluetooth adapter is disabled by default in Diet PI!
+
+10. Reboot your Loxberry
 
 sudo reboot
 
-12. Log in again as user loxberry on your Loxberry via ssh
+11. Log in again as user loxberry on your Loxberry via ssh
 
-13. Create a new private and public key pair. You should use the VIN of your car as the name of the key.
+12. (optional9 Create a new private and public key pair. You should use the VIN of your car as the name of the key.
+
+Since version 0.5 you can create the keypair directly from the GUI, so you don't have to use any command line tools.
 
 cd /opt/loxberry/config/plugins/teslacmd/
 tesla-keygen -key-file LRW31234567890123-private.pem create > LRW31234567890123-public.pem
 
-14. Install the public key in your car - requires nfc key card to tap on center console. You may use a different device as your Loxberry, but you may have to be in or very close to the car
+13. Install the public key in your car - requires nfc key card to tap on center console. You may use a different device as your Loxberry, but you may have to be in or very close to the car
 
 cd /opt/loxberry/config/plugins/teslacmd/
 tesla-control -vin LRW31234567890123 -ble add-key-request ./LRW31234567890123-public.pem owner cloud_key
 
 Once the public key is installed in your car you may delete this key.
 
-15. Verify if you are able to retrieve the status from the car and send commands to it
+14. (optional) Verify if you are able to retrieve the status from the car and send commands to it
 
 tesla-control -ble -vin LRW31234567890123 -key-file /opt/loxberry/config/plugins/teslacmd/LRW31234567890123-private.pem body-controller-state
 - output is different depending on the sleep state of the car

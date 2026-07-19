@@ -21,8 +21,13 @@ LBWeb::lbheader($template_title, $helplink, $helptemplate);
 
 //Checktoken
 $tokenvalid = tesla_checktoken();
-$tokenparts = explode(".", $login->bearer_token);
-$tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
+$tokenexpires = 0;
+if (!empty($login->bearer_token)) {
+    $tokenparts = explode(".", $login->bearer_token);
+    if (isset($tokenparts[1])) {
+        $tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
+    }
+}
 
 $useVIN = true;
 
@@ -58,6 +63,7 @@ if($tokenvalid == "false") {
 <!-- Queries -->
 <?php
 	$vehicles = tesla_summary();
+	$vehicles = get_all_vehicles($vehicles);
     $apidata = read_api_data();
 ?>
 

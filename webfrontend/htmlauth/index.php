@@ -25,8 +25,20 @@ LBWeb::lbheader($template_title, $helplink, $helptemplate);
 
 //Checktoken
 $tokenvalid = tesla_checktoken();
-$tokenparts = explode(".", $login->bearer_token);
-$tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
+$tokenexpires = 0;
+if (!empty($login->bearer_token)) {
+    $tokenparts = explode(".", $login->bearer_token);
+    if (isset($tokenparts[1])) {
+        $tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
+    }
+}
+$ownerVehicles = new stdClass();
+if($tokenvalid == "true") {
+    $ownerVehicles = tesla_summary();
+}
+$vehicles = get_all_vehicles($ownerVehicles);
+$apidata = read_api_data();
+$localBleVehicles = read_local_ble_vehicles();
 ?>
 
 <style>
@@ -172,7 +184,7 @@ if($tokenvalid == "true") {
 ?>
 
 <p style="color:red">
-    <b>You are not logged in.</b>
+    <b>You are not logged in.</b> You can still add vehicles locally via BLE scan below.
 </p><br>
 
 <?php
@@ -298,10 +310,6 @@ if($tokenvalid == "true") {
 as a successor of the <a href="https://tesla-api.timdorr.com/">(inofficial) Owner's API</a>. 
 Pre-2021 model S and X vehicles do not support this new protocol, but all other models will be shifted to the new protocol in 2024.</p> 
 
-<?php
-	$vehicles = tesla_summary();
-    $apidata = read_api_data();
-?>
 <style>
     .table-ui-title {
         font-size: 1.4em;
@@ -387,6 +395,12 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
 
 <?php
 	}
+else {
+?>
+<div class="wide">API selection</div>
+<p>The list of vehicles from your Tesla account is only available with a valid token. You can still add vehicles locally via BLE scan below.</p>
+<?php
+}
 ?>
 
 <script type="text/javascript">
@@ -394,6 +408,77 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
     $(".ui-table-columntoggle-btn").appendTo("#colTogglePlaceholder");
 });
 </script>
+<br><br>
+<div class="wide">Vehicles found locally via BLE scan</div>
+
+<p>Instead of using a token, you can search for nearby Tesla vehicles locally via BLE. Select a scanned vehicle and store its VIN mapping in the plugin.</p>
+<p>
+    <a href="javascript:startBleScan()" class="ui-btn ui-corner-all ui-shadow ui-btn-inline ui-icon-search ui-btn-icon-left">Search vehicles via BLE</a>
+</p>
+<div id="bleScanMessage" class="hint"></div>
+<div class="form-group">
+    <table data-role="table" class="ui-body-d ui-shadow table-stripe ui-responsive">
+        <thead>
+            <tr class="ui-bar-d">
+                <th>Local name</th>
+                <th>RSSI</th>
+                <th>Distance</th>
+                <th>VIN</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="bleScanResults">
+            <tr>
+                <td colspan="5">No scan started yet.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<p style="color:green">
+    <b>The following locally mapped BLE vehicles are stored in the plugin.</b>
+</p>
+<div class="form-group">
+    <table data-role="table" class="ui-body-d ui-shadow table-stripe ui-responsive">
+        <thead>
+            <tr class="ui-bar-d">
+                <th>Local name</th>
+                <th>VIN</th>
+                <th>Name</th>
+                <th>Last RSSI</th>
+                <th>Last seen</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+<?php
+    if (object_count($localBleVehicles) == 0) {
+?>
+            <tr>
+                <td colspan="6">No locally mapped BLE vehicles stored yet.</td>
+            </tr>
+<?php
+    } else {
+        foreach ($localBleVehicles as $localVehicle) {
+?>
+            <tr>
+                <td><?php echo $localVehicle->local_name; ?></td>
+                <td><?php echo $localVehicle->vin; ?></td>
+                <td><?php echo $localVehicle->display_name; ?></td>
+                <td><?php echo isset($localVehicle->rssi) ? $localVehicle->rssi : "-"; ?></td>
+                <td><?php echo empty($localVehicle->last_seen) ? "-" : $localVehicle->last_seen; ?></td>
+                <td>
+                    <a href="javascript:deleteBleVehicle('<?php echo $localVehicle->vin; ?>')" class="redbutton pi pi-trash ui-link"
+                        title="Delete local BLE mapping."></a>
+                </td>
+            </tr>
+<?php
+        }
+    }
+?>
+        </tbody>
+    </table>
+</div>
 <br><br>
 <!-- Vehicle Command API -->
 <div class="wide">Vehicle Command API settings </div>
@@ -470,6 +555,104 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
 <br>
 
 <script>
+
+var mappedBleVehicles = <?php echo json_encode($localBleVehicles); ?>;
+
+function escapeHtml(text) {
+    return $("<div>").text(text == null ? "" : text).html();
+}
+
+function renderBleScanResults(scanResults) {
+    var html = "";
+    if (!scanResults || !scanResults.length) {
+        html = "<tr><td colspan=\"5\">No Tesla vehicles found via BLE.</td></tr>";
+    } else {
+        $.each(scanResults, function(index, scanResult) {
+            var mappedVin = scanResult.mappedVin || "";
+            html += "<tr>";
+            html += "<td>" + escapeHtml(scanResult.localName) + "</td>";
+            html += "<td>" + escapeHtml(scanResult.rssi) + "</td>";
+            html += "<td>" + escapeHtml(scanResult.distance) + "</td>";
+            html += "<td><input type=\"text\" id=\"bleVin-" + index + "\" value=\"" + escapeHtml(mappedVin) + "\" placeholder=\"Enter VIN\" data-mini=\"true\"></td>";
+            html += "<td><a href=\"javascript:saveBleVehicle(" + index + ", '" + encodeURIComponent(scanResult.localName) + "', '" + escapeHtml(scanResult.rssi) + "')\" class=\"ui-btn ui-corner-all ui-shadow ui-btn-inline ui-icon-check ui-btn-icon-left\">Save</a></td>";
+            html += "</tr>";
+        });
+    }
+    $("#bleScanResults").html(html).trigger("create");
+}
+
+function startBleScan() {
+    $("#bleScanMessage").html("Scanning via BLE. Please wait ...");
+    $.ajax({
+        url: "./blescan.php",
+        method: "POST"
+    })
+    .done(function(response) {
+        if (response.success == 1) {
+            renderBleScanResults(response.scanResults);
+            $("#bleScanMessage").html("BLE scan finished.");
+        } else {
+            $("#bleScanMessage").html(response.message);
+        }
+    })
+    .fail(function(xhr) {
+        var response = xhr.responseJSON;
+        if (response && response.message) {
+            $("#bleScanMessage").html(response.message);
+        } else {
+            $("#bleScanMessage").html("BLE scan failed.");
+        }
+    });
+}
+
+function saveBleVehicle(index, localName, rssi) {
+    var vin = $("#bleVin-" + index).val();
+    $("#bleScanMessage").html("Saving BLE mapping ...");
+    $.ajax({
+        url: "./saveblevehicle.php",
+        method: "POST",
+        data: {
+            local_name: decodeURIComponent(localName),
+            vin: vin,
+            rssi: rssi
+        }
+    })
+    .done(function(response) {
+        $("#bleScanMessage").html(response.message);
+        location.replace(location.href);
+    })
+    .fail(function(xhr) {
+        var response = xhr.responseJSON;
+        if (response && response.message) {
+            $("#bleScanMessage").html(response.message);
+        } else {
+            $("#bleScanMessage").html("Saving BLE mapping failed.");
+        }
+    });
+}
+
+function deleteBleVehicle(vin) {
+    $("#bleScanMessage").html("Deleting BLE mapping ...");
+    $.ajax({
+        url: "./deleteblevehicle.php",
+        method: "POST",
+        data: {
+            vin: vin
+        }
+    })
+    .done(function(response) {
+        $("#bleScanMessage").html(response.message);
+        location.replace(location.href);
+    })
+    .fail(function(xhr) {
+        var response = xhr.responseJSON;
+        if (response && response.message) {
+            $("#bleScanMessage").html(response.message);
+        } else {
+            $("#bleScanMessage").html("Deleting BLE mapping failed.");
+        }
+    });
+}
 
 // Get state from car via BLE popup (Question)
 function getState( vin ) {

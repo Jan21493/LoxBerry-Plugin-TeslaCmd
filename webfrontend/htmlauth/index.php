@@ -408,6 +408,10 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
 </p>
 <form method="post">
     <input type="hidden" name="setAPI" value="">
+       <?php
+        $teslaDebug = isset($apidata->tesla_debug) ? (int)$apidata->tesla_debug : 0;
+        $bleRetries = isset($apidata->ble_retries) ? (int)$apidata->ble_retries : 1;
+    ?>
     <table>
         <colgroup>
             <col span="1" style="width: 30%;">
@@ -452,7 +456,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
                 <span class="hint">Enable debugging for tesla commands to get detailled information during troubleshooting.</span></label>
             </td>
             <td colspan=4>
-            <input type="checkbox" data-role="flipswitch" name="tesla_debug" id="tesla_debug" data-on-text="On" data-off-text="Off" data-wrapper-class="custom-label-flipswitch" <?php if ($apidata->tesla_debug == 1) echo 'checked=""'; ?>
+            <input type="checkbox" data-role="flipswitch" name="tesla_debug" id="tesla_debug" data-on-text="On" data-off-text="Off" data-wrapper-class="custom-label-flipswitch" <?php if ($teslaDebug === 1) echo 'checked="checked"'; ?>>
             </td>
         </tr>
         <tr>
@@ -460,9 +464,9 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
                 <strong>Retry BLE command</strong><br>
                 <span class="hint">Define how often the BLE command is retried in case an error is returned to increase reliability. Note: it may take longer to execute the command.</span>
             </td>
-            <td><input type="radio" id="ble_retries0" name="ble_retries" data-mini="true" value="0" <?php if ($apidata->ble_retries == "0") echo "checked"; ?>/><label for="ble_retries0">No retry</label></td>
-            <td><input type="radio" id="ble_retries1" name="ble_retries" data-mini="true" value="1" <?php if ($apidata->ble_retries == "1") echo "checked"; ?>/><label for="ble_retries1">Retry once</label></td>
-            <td><input type="radio" id="ble_retries2" name="ble_retries" data-mini="true" value="2" <?php if ($apidata->ble_retries == "2") echo "checked"; ?>/><label for="ble_retries2">Retry twice</label></td>
+            <td><input type="radio" id="ble_retries0" name="ble_retries" data-mini="true" value="0" <?php if ($bleRetries === 0) echo 'checked="checked"'; ?>/><label for="ble_retries0">No retry</label></td>
+            <td><input type="radio" id="ble_retries1" name="ble_retries" data-mini="true" value="1" <?php if ($bleRetries === 1) echo 'checked="checked"'; ?>/><label for="ble_retries1">Retry once</label></td>
+            <td><input type="radio" id="ble_retries2" name="ble_retries" data-mini="true" value="2" <?php if ($bleRetries === 2) echo 'checked="checked"'; ?>/><label for="ble_retries2">Retry twice</label></td>
         </tr>
     </table>   
     <input type="submit" value="Save Vehicle Command API settings">

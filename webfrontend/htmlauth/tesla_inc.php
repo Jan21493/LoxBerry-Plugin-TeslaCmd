@@ -689,9 +689,11 @@ function makeDir($path)
      return is_dir($path) || mkdir($path);
 }
 
-function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 15, $exclusive = false)
+function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30, $exclusive = false)
 {
 	$lockfile = "";
+	$lockHandle = NULL;
+	$lockAcquired = false;
 
 	// Function to execute shell command
 	//[ ] If Timeout, restart apache server: sudo systemctl restart apache2
@@ -706,64 +708,31 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 15,
 	}
 
 	if ($exclusive) {
-		LOGINF("tesla_shell_exec: use locking and queuing to get exclusive access to BLE device!");
-		// simple queuing system, because only one utiliy that use BLE can be run at a time!
+		LOGINF("tesla_shell_exec: use flock-based locking for exclusive BLE access!");
+		// Use a single kernel-backed lock file. flock is automatically released when a process exits.
 		// set temp directory to user loxberry UID, e.g. 1001
 		$tmpdir = "/run/user/".getmyuid().'/tesla';
 		if (makeDir($tmpdir)) {
-			// create a file with current time stamp - it's unlikely that two files will have the same name
-			$timestamp =  hrtime(true);
-			$lockfile = $tmpdir.'/'.$timestamp;
-			touch($lockfile);
-			LOGDEB("tesla_shell_exec: created lock file: $lockfile.");
-			// grant $lock_timeout seconds (multiplied with retries counter +1) for the first process in list finish, that means to delete the file lock
-			$lockSeconds = $lock_timeout * ((int)$retries + 1);
-			LOGDEB("tesla_shell_exec: lock for: $lockSeconds seconds.");
-			$waitSeconds = 0;
-			$fileList = scandir($tmpdir);
-			foreach ($fileList as $key => $fileEntry) {
-				LOGDEB("tesla_shell_exec: file list entry no: $key, entry: $fileEntry");
-			}
-			// . and .. are the first two entries, starting from 0, so 2 is the first real entry in list
-			if (count($fileList) > 2) {
-				$firstFile = $fileList[2];
-				LOGDEB("tesla_shell_exec: first entry: $firstFile");
-				LOGDEB("tesla_shell_exec: queue length: ".(count($fileList)-2).", position: ".(array_search($timestamp, $fileList)-1));
-				if ($firstFile == $timestamp) {
-					LOGDEB("tesla_shell_exec: queue is empty - very good.");
-				}
-				while ($firstFile != $timestamp && $waitSeconds < 300) {
+			$lockfile = $tmpdir.'/ble.lock';
+			$lockHandle = fopen($lockfile, 'c');
+			if ($lockHandle !== false) {
+				$lockSeconds = max(30, (int)$lock_timeout) * ((int)$retries + 1);
+				$waitSeconds = 0;
+				LOGDEB("tesla_shell_exec: waiting for flock lock file: $lockfile, timeout: $lockSeconds seconds.");
+				while ($waitSeconds < $lockSeconds) {
+					if (flock($lockHandle, LOCK_EX | LOCK_NB)) {
+						$lockAcquired = true;
+						break;
+					}
 					sleep(1);
-					$lockSeconds--;
 					$waitSeconds++;
-					$fileList = scandir($tmpdir);
-					if (count($fileList) > 2) {
-						if ($firstFile != $fileList[2]) {
-							// firstFile has changed, so reset lock seconds
-							LOGDEB("tesla_shell_exec: first entry has changed to: ".$fileList[2]);
-							foreach ($fileList as $key => $fileEntry) {
-								LOGDEB("tesla_shell_exec: file list entry no: $key, entry: $fileEntry");
-							}
-							$lockSeconds = $lock_timeout * ((int)$retries + 1);
-							$firstFile = $fileList[2];
-							LOGDEB("tesla_shell_exec: queue length: ".(count($fileList)-2).", position: ".(array_search($timestamp, $fileList)-1).", waiting: ".$waitSeconds." seconds.");
-						}
-					} else {
-						LOGERR("tesla_shell_exec: ERROR - file list has no entries except . and ..");
-						$firstFile = $timestamp;
-					}
-
-					// no other process has deleted the file so far, so do it now.
-					if ($lockSeconds == 0 && $firstFile != $timestamp) {
-						unlink($tmpdir.'/'.$firstFile);
-					}
 				}
-				LOGINF("tesla_shell_exec: Waiting time in queue for other BLE commands to finish: $waitSeconds seconds.");
-				if ($waitSeconds >= 300) {
-					LOGWARN("tesla_shell_exec: We finally gave up and are now trying to execute the command without exclusive access anyway.");
-				} 
+				LOGINF("tesla_shell_exec: Waiting time for BLE lock: $waitSeconds seconds.");
+				if (!$lockAcquired) {
+					LOGWARN("tesla_shell_exec: Timeout while waiting for BLE lock. Continue without exclusive access.");
+				}
 			} else {
-				LOGERR("tesla_shell_exec: file list that is used for queuing has no entries except . and .. ! File lock for this process is missing.");	
+				LOGERR("tesla_shell_exec: can't open lock file: $lockfile. Try command without exclusive access!");
 			}
 		} else {
 			LOGERR("tesla_shell_exec: ".$tmpdir." does not exist and can't be created. Try command now without exclusive access!");
@@ -811,9 +780,12 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 15,
 		LOGINF("tesla_shell_exec: command has returned an error. Final result code:" . $result_code);
 	}
 	// remove file lock
-	if ($exclusive) {
-		unlink($lockfile);
-		LOGDEB("tesla_shell_exec: removed lock file: $lockfile");
+	if ($exclusive && $lockHandle !== NULL) {
+		if ($lockAcquired) {
+			flock($lockHandle, LOCK_UN);
+			LOGDEB("tesla_shell_exec: released flock lock: $lockfile");
+		}
+		fclose($lockHandle);
 	}
 
 	// Debugging

@@ -64,10 +64,11 @@ if (!empty($vin)) {
 	LOGDEB("send.php: VIN: $vin was provided, ".(empty($vid) ? ", no ID" : ", ID: $vid").", ".$apinames[$api]." is used.");
 } elseif (!empty($vid)) {
 	// Vehicle ID was provided. A lookup is done to get all vehicles / energy sites that are associated with the ID
-	$vehicles = tesla_summary();
+	$ownerVehicles = tesla_summary();
+	$vehicles = get_all_vehicles($ownerVehicles);
     foreach ($vehicles as $index => &$vehicle) {
 		// vehicle was found
-		if ($vid == $vehicle->id_s) {
+		if (($vid == $vehicle->id_s) || ($vid == $vehicle->id)) {
 			$vin = $vehicle->vin;
 			$api = getApiProtocol($vin);
 		}

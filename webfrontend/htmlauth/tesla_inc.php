@@ -121,6 +121,7 @@ function tesla_summary()
 		}
 		return $returndata;
 	}
+	return $returndata;
 } 
 /*
 // to be deleted in final version - 
@@ -1009,13 +1010,13 @@ function read_api_data()
 		else
 			$apidata->ble_retries = 1;
 
-		$apidata->lock_timeout = $apidata->command_timeout + $apidata->connect_timeout + 1;
-
 		LOGDEB("read_api_data: command timeout: ".$apidata->command_timeout);
 		LOGDEB("read_api_data: connect timeout: ".$apidata->connect_timeout);
 		LOGDEB("read_api_data: debug option: ".$apidata->tesla_debug);
 		LOGDEB("read_api_data: retries: ".$apidata->ble_retries);
 	}
+
+	$apidata->lock_timeout = $apidata->command_timeout + $apidata->connect_timeout + 1;
 	
 	// create generic tesla-control command with options
 	$apidata->baseblecmd = TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s ";
@@ -1025,6 +1026,151 @@ function read_api_data()
 	$apidata->baseblecmd .= COMMAND_TAG;
 	LOGDEB("read_api_data: base BLE command: ".$apidata->baseblecmd);
 	return $apidata;
+}
+
+function object_count($object)
+{
+	if (!is_object($object)) {
+		return 0;
+	}
+	return count(get_object_vars($object));
+}
+
+function read_local_ble_vehicles()
+{
+	LOGINF("read_local_ble_vehicles: Read locally mapped BLE vehicles.");
+
+	if( !file_exists(LOCALBLEFILE) ) {
+		LOGDEB("read_local_ble_vehicles: No local BLE vehicle file found.");
+		return new stdClass();
+	}
+
+	$vehicles = json_decode(file_get_contents(LOCALBLEFILE));
+	if (!is_object($vehicles)) {
+		LOGWARN("read_local_ble_vehicles: File content is invalid. Returning empty list.");
+		return new stdClass();
+	}
+
+	return $vehicles;
+}
+
+function write_local_ble_vehicles($vehicles)
+{
+	LOGINF("write_local_ble_vehicles: Write locally mapped BLE vehicles.");
+	file_put_contents(LOCALBLEFILE, json_encode($vehicles, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function get_local_ble_vehicle_by_vin($vin)
+{
+	$vehicles = read_local_ble_vehicles();
+	foreach ($vehicles as $mappedVehicle) {
+		if (isset($mappedVehicle->vin) && ($mappedVehicle->vin == $vin)) {
+			return $mappedVehicle;
+		}
+	}
+	return null;
+}
+
+function create_local_ble_vehicle($mappedVehicle)
+{
+	$vehicle = new stdClass();
+	$vehicle->id = $mappedVehicle->local_name;
+	$vehicle->id_s = strval($mappedVehicle->local_name);
+	$vehicle->vin = $mappedVehicle->vin;
+	$vehicle->display_name = empty($mappedVehicle->display_name) ? "BLE ".$mappedVehicle->local_name : $mappedVehicle->display_name;
+	$vehicle->state = empty($mappedVehicle->state) ? "local via BLE" : $mappedVehicle->state;
+	$vehicle->access_type = "BLE scan";
+	$vehicle->local_name = $mappedVehicle->local_name;
+	$vehicle->local_rssi = isset($mappedVehicle->rssi) ? $mappedVehicle->rssi : null;
+	$vehicle->last_seen = empty($mappedVehicle->last_seen) ? "" : $mappedVehicle->last_seen;
+	$vehicle->local_ble = true;
+	return $vehicle;
+}
+
+function get_all_vehicles($ownerVehicles = null)
+{
+	if (!is_object($ownerVehicles)) {
+		$ownerVehicles = new stdClass();
+	}
+
+	$vehicles = new stdClass();
+	foreach ($ownerVehicles as $key => $vehicle) {
+		$vehicles->{$key} = $vehicle;
+	}
+
+	$localVehicles = read_local_ble_vehicles();
+	foreach ($localVehicles as $localVehicle) {
+		if (empty($localVehicle->vin) || empty($localVehicle->local_name)) {
+			continue;
+		}
+		$found = false;
+		foreach ($vehicles as $key => $vehicle) {
+			if (isset($vehicle->vin) && ($vehicle->vin == $localVehicle->vin)) {
+				$vehicle->local_name = $localVehicle->local_name;
+				$vehicle->local_rssi = isset($localVehicle->rssi) ? $localVehicle->rssi : null;
+				$vehicle->last_seen = empty($localVehicle->last_seen) ? "" : $localVehicle->last_seen;
+				$vehicle->local_ble = true;
+				$vehicles->{$key} = $vehicle;
+				$found = true;
+				break;
+			}
+		}
+		if (!$found) {
+			$vehicles->{strval($localVehicle->local_name)} = create_local_ble_vehicle($localVehicle);
+		}
+	}
+
+	return $vehicles;
+}
+
+function get_ble_scan_distance($rssi)
+{
+	if (!is_numeric($rssi)) {
+		return "not available";
+	}
+	if ($rssi > -50) {
+		return "very strong";
+	} elseif ($rssi > -67) {
+		return "strong";
+	} elseif ($rssi > -80) {
+		return "medium";
+	} elseif ($rssi > -90) {
+		return "weak";
+	}
+	return "very weak";
+}
+
+function tesla_ble_scan()
+{
+	$apidata = read_api_data();
+	$scanCmd = TESLA_BLESCAN.COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s ";
+	if ($apidata->tesla_debug) {
+		$scanCmd .= DEBUG_OPTION." ";
+	}
+	$scanCmd .= BODYCONTROLLERSTATE;
+
+	LOGINF("tesla_ble_scan: Scan for Tesla vehicles via BLE.");
+	$result_code = tesla_shell_exec($scanCmd, $output, $apidata->ble_retries, $apidata->lock_timeout, true);
+
+	LOGDEB("tesla_ble_scan: -------------------------------------------------------------------------------------");
+	foreach($output as $line) {
+		LOGDEB("$line");
+	}
+	LOGDEB("tesla_ble_scan: -------------------------------------------------------------------------------------");
+
+	$json = trim(implode("", $output));
+	$start = strpos($json, "{");
+	$end = strrpos($json, "}");
+	if ($start !== false && $end !== false && $end >= $start) {
+		$json = substr($json, $start, $end - $start + 1);
+	}
+	$data = json_decode($json);
+
+	if (($result_code != 0) || !isset($data->scanResults) || !is_array($data->scanResults)) {
+		return array($result_code, $output, null);
+	}
+
+	return array($result_code, $output, $data->scanResults);
 }
 
 function write_api_data($apidata)
@@ -1189,6 +1335,10 @@ function getModelFromVIN($vin) {
 }
 
 function getApiProtocol($vin) {
+
+	if (!empty($vin) && get_local_ble_vehicle_by_vin($vin) != null) {
+		return BLE_PLUS_OWNERS_API;
+	}
 
 	if (strlen($vin) == 17) {
 		$modelCode = substr($vin, 3, 1);

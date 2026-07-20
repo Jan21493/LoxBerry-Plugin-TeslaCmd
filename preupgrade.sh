@@ -52,5 +52,7 @@ mkdir /tmp/$PTEMPDIR\_upgrade/config
 echo "<INFO> Backing up existing config files"
 cp -v -r $PCONFIG/ /tmp/$PTEMPDIR\_upgrade/config
 
+echo "<INFO> PREUPGRADE script completed!"
+
 # Exit with Status 0
 exit 0

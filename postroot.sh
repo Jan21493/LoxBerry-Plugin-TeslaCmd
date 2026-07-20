@@ -45,7 +45,10 @@ PLOG=$LBPLOG/$PDIR # Note! This is stored on a Ramdisk now!
 PCONFIG=$LBPCONFIG/$PDIR
 PSBIN=$LBPSBIN/$PDIR
 PBIN=$LBPBIN/$PDIR
- 
+
+# Track overall installation errors
+INSTALL_ERRORS=0
+
 #echo -n "<INFO> Current working folder is: "
 #pwd
 #echo "<INFO> Command is: $COMMAND"
@@ -60,22 +63,54 @@ PBIN=$LBPBIN/$PDIR
 #echo "<INFO> Plugin Log folder (on RAMDISK!) is: $PLOG"
 #echo "<INFO> Plugin CONFIG folder is: $PCONFIG"
  
+# Helper to run a command, log it, and handle failures consistently.
+# NOTE: we do not exit the script if the command / module installation fails,
+#       but we log the error and continue with the next steps.
+run_cmd() {
+  desc="$1"
+  shift
+
+  echo "<INFO> $desc"
+  "$@"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    echo "<ERROR> Failed: $desc (exit code $rc)"
+    INSTALL_ERRORS=$((INSTALL_ERRORS + 1))
+    return $rc
+  fi
+  echo "<OK> $desc"
+  return 0
+}
+
 echo "<INFO> Copy pre-build binary tools from Tesla Vehicle Command SDK if Linux Version is 64-bit and ARMv8 architecture"
 if [[ "$(uname -m)" == 'aarch64' ]]; then
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.aarch64 /usr/local/bin/tesla-control
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.aarch64 /usr/local/bin/tesla-keygen
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-scan.aarch64 /usr/local/bin/tesla-scan
+   echo "<INFO> Copying pre-build binary tools for aarch64 architecture"
+   run_cmd "Copying tesla-control" cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.aarch64 /usr/local/bin/tesla-control
+   run_cmd "Copying tesla-keygen" cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.aarch64 /usr/local/bin/tesla-keygen
+   run_cmd "Copying tesla-blescan" cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-blescan.aarch64 /usr/local/bin/tesla-blescan
    # add rights for BLE access to binary file
-   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
-   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-scan
+   run_cmd "Setting capabilities for tesla-control" setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
+   run_cmd "Setting capabilities for tesla-blescan" setcap 'cap_net_admin=eip' /usr/local/bin/tesla-blescan
 elif [[ "$(uname -m)" == 'armv7l' ]]; then
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.armv7l /usr/local/bin/tesla-control
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.armv7l /usr/local/bin/tesla-keygen
-   cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-scan.armv7l /usr/local/bin/tesla-scan
+   echo "<INFO> Copying pre-build binary tools for armv7l architecture"
+   run_cmd "Copying tesla-control" cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-control.armv7l /usr/local/bin/tesla-control
+   run_cmd "Copying tesla-keygen" cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-keygen.armv7l /usr/local/bin/tesla-keygen
+   run_cmd "Copying tesla-blescan" cp -f -r $LBHOMEDIR/bin/plugins/$PDIR/tesla-blescan.armv7l /usr/local/bin/tesla-blescan
    # add rights for BLE access to binary file
-   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
-   setcap 'cap_net_admin=eip' /usr/local/bin/tesla-scan
+   run_cmd "Setting capabilities for tesla-control" setcap 'cap_net_admin=eip' /usr/local/bin/tesla-control
+   run_cmd "Setting capabilities for tesla-blescan" setcap 'cap_net_admin=eip' /usr/local/bin/tesla-blescan
+else
+   echo "<ERROR> No pre-build binary tools available for this architecture ($(uname -m)). Please build the tools (tesla-control, tesla-keygen, tesla-blescan) from source code."
+   INSTALL_ERRORS=$((INSTALL_ERRORS + 1))
 fi
 
-# Exit with Status 0
+if [ $INSTALL_ERRORS -gt 0 ]; then
+  echo "<ERROR> POSTROOT completed with $INSTALL_ERRORS error(s). Some features may not work correctly."
+else
+  echo "<INFO> POSTROOT script completed!"
+fi
+
+# Exit with Status 0 - non-critical errors (e.g. optional Perl modules) should
+# not abort the installation. Change to 'exit $INSTALL_ERRORS' if you want the
+# installer to treat any failure as a hard error.
 exit 0

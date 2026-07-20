@@ -48,12 +48,15 @@ cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/sessiondata.json $LBHOMEDIR/config
 cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/apidata.json $LBHOMEDIR/config/plugins/$PDIR/ 
 chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/sessiondata.json
 chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/apidata.json
+
 echo "<INFO> Copy back existing keys"
 cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/*.pem $LBHOMEDIR/config/plugins/$PDIR/ 
 chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/*.pem
 
 echo "<INFO> Updating crontab"
 sudo $LBHOMEDIR/sbin/installcrontab.sh $PSHNAME $(pwd)/cron/crontab
+
+echo "<INFO> POSTINSTALL script completed!"
 
 # Exit with Status 0
 exit 0

@@ -17,7 +17,7 @@ All data from the vehicle is transferred back to the Loxone Miniserver via MQTT.
 > [!NOTE]
 > This plugin uses modified utilities to the ones that were provided by Tesla. See [README.md](https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility) for details about purpose and parameters.
 
-The plugin contains binary files for the utilities 'tesla-control', 'tesla-keygen', and 'tesla-scan' for Raspberry PI 32- and 64-bit only. For all other platforms you have to follow the instructions provided by Telsa to install 'go' and compile and build the two utilities. You may choose to compile and build the two utilities on a Raspberry PI if you have security concerns or if Tesla has provided a new version of the SDK.
+The plugin uses the utilities 'tesla-control', 'tesla-keygen', 'tesla-scan', and 'tesla-blescan'. For Raspberry PI 32- and 64-bit the plugin contains binary files for 'tesla-control', 'tesla-keygen', and 'tesla-scan'. For all other platforms, and currently also for 'tesla-blescan', you have to follow the instructions provided by Telsa to install 'go' and compile and build the utilities. You may choose to compile and build the utilities on a Raspberry PI if you have security concerns or if Tesla has provided a new version of the SDK.
 
 Currently this plugin is in development, so it should be used in any productive environment with care. It shows a list of all commands that are available for your vehicles and powerwalls as well as entering test queries to know more about each command and the responses.
 

@@ -4,6 +4,7 @@ define('LOGINFILE',         "$lbpconfigdir/sessiondata.json");
 // to be deleted in final version - 
 define('FAKEFILE',          "$lbpconfigdir/fakedata.json"); 
 define('APIFILE',           "$lbpconfigdir/apidata.json"); 
+define('LOCALBLEFILE',      "$lbpconfigdir/localblevehicles.json"); 
 define('COMMANDFILE',       "$lbpconfigdir/tesla_commands.json"); 
 define('MQTTTOPIC',         "${lbpplugindir}"); 
 define('PRIVATEKEYSUFFIX',  "-private.pem"); 
@@ -20,6 +21,7 @@ define('PRIVATE_KEY_WITH_PATH', KEYPAIRPATH."/".VEHICLE_TAG.PRIVATEKEYSUFFIX);
 define('PUBLIC_KEY_WITH_PATH', KEYPAIRPATH."/".VEHICLE_TAG.PUBLICKEYSUFFIX);
 
 define('TESLA_CONTROL', "tesla-control -ble ");
+define('TESLA_BLESCAN', "tesla-blescan ");
 define('LIST_KEYS', "list-keys");
 define('BODYCONTROLLERSTATE', "body-controller-state");
 define('WAKE', "wake");

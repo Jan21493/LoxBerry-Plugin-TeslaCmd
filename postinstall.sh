@@ -46,9 +46,10 @@ PBIN=$LBPBIN/$PDIR
 echo "<INFO> Copy back existing config files"
 cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/sessiondata.json $LBHOMEDIR/config/plugins/$PDIR/ 
 cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/apidata.json $LBHOMEDIR/config/plugins/$PDIR/ 
+cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/localblevehicles.json $LBHOMEDIR/config/plugins/$PDIR/ 
 chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/sessiondata.json
 chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/apidata.json
-
+chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/localblevehicles.json
 echo "<INFO> Copy back existing keys"
 cp -f -r /tmp/$PTEMPDIR\_upgrade/config/$PDIR/*.pem $LBHOMEDIR/config/plugins/$PDIR/ 
 chmod 0640 $LBHOMEDIR/config/plugins/$PDIR/*.pem

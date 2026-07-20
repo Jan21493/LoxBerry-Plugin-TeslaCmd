@@ -1344,7 +1344,7 @@ function getModelFromVIN($vin) {
 	return $model;
 }
 
-function getApiProtocol($vin, $tokenvalid) {
+function getApiProtocol($vin, $tokenvalid = true) {
 
 	if (!empty($vin) && get_local_ble_vehicle_by_vin($vin) != null) {
 		if ($tokenvalid)

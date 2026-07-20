@@ -45,7 +45,7 @@
         "DESC": "All information and states of the vehicle."
     },
     "LIST_KEYS": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "GET",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -126,7 +126,7 @@
         "DESC": "Vehicle state, such as which doors are open, tpms pressure"
     },
     "BODY_CONTROLLER_STATE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "GET",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -138,7 +138,7 @@
         }
     },
     "STATE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "GET",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -160,7 +160,7 @@
         "DESC": "Wakes up the vehicle from a sleeping state."
     },
     "BLE_WAKE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -169,7 +169,7 @@
         "DESC": "Wakes up the vehicle from a sleeping state via Bluetooth Low Energy (BLE)."
     },
     "PING": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -178,7 +178,7 @@
         "DESC": "Ping the vehicle."
     },
     "REMOTE_START_DRIVE": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/remote_start_drive",
@@ -187,7 +187,7 @@
         "DESC": "Enables keyless driving. There is a two minute window after issuing the command to start driving the car."
     },
     "DOOR_UNLOCK": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/door_unlock",
@@ -196,7 +196,7 @@
         "DESC": "Unlocks the doors to the vehicle."
     },
     "DOOR_LOCK": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/door_lock",
@@ -240,7 +240,7 @@
         }
     },
     "WINDOWS_CLOSE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -249,7 +249,7 @@
         "DESC": "Closes all windows simultaneously."
     },
     "WINDOWS_VENT": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -270,7 +270,7 @@
         }
     },
     "TRUNK_CLOSE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -279,7 +279,7 @@
         "DESC": "Closes vehicle trunk. Only available on certain vehicle types."
     },
     "TRUNK_OPEN": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -288,7 +288,7 @@
         "DESC": "Open vehicle trunk. Note that trunk-close only works on certain vehicle types."
     },
     "TRUNK_MOVE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -297,7 +297,7 @@
         "DESC": "Toggle trunk open/closed. Closing is only available on certain vehicle types."
     },
     "FRUNK_OPEN": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -306,7 +306,7 @@
         "DESC": "Open vehicle frunk. Note that there's no frunk-close command!"
     },
     "HONK_HORN": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/honk_horn",
@@ -315,7 +315,7 @@
         "DESC": "Honks the horn of the vehicle once."
     },
     "FLASH_LIGHTS": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "WORKING": false,
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
@@ -325,7 +325,7 @@
         "DESC": "Flashes the head- and backlights once."
     },
     "AUTO_CONDITIONING_START": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/auto_conditioning_start",
@@ -334,7 +334,7 @@
         "DESC": "Start the climate control (HVAC) system. Will cool or heat automatically, depending on set temperature."
     },
     "AUTO_CONDITIONING_STOP": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/auto_conditioning_stop",
@@ -343,7 +343,7 @@
         "DESC": "Stop the climate control (HVAC) system."
     },
     "AUTO_SEAT_AND_CLIMATE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -369,7 +369,7 @@
         }
     },
     "CLIMATE_SET_TEMP": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -406,7 +406,7 @@
         }
     },
     "SEAT_HEATER": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -431,7 +431,7 @@
         }
     },
     "STEERING_WHEEL_HEATER": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -443,7 +443,7 @@
         }
     },
     "CHARGE_PORT_DOOR_OPEN": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/charge_port_door_open",
@@ -452,7 +452,7 @@
         "DESC": "Opens the charge port or unlocks the cable."
     },
     "CHARGE_PORT_DOOR_CLOSE": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/charge_port_door_close",
@@ -461,7 +461,7 @@
         "DESC": "Closes the charge port."
     },
     "CHARGE_START": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/charge_start",
@@ -470,7 +470,7 @@
         "DESC": "If the car is plugged in but not currently charging, this will start it charging."
     },
     "CHARGE_STOP": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/charge_stop",
@@ -497,7 +497,7 @@
         "DESC": "Set the vehicle to max charge limit."
     },
     "SET_CHARGE_LIMIT": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/set_charge_limit",
@@ -509,7 +509,7 @@
         }
     },
     "SET_CHARGING_AMPS": {
-        "API": [0, 1],
+        "API": [0, 1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "api/1/vehicles/{vehicle_tag}/command/set_charging_amps",
@@ -552,7 +552,7 @@
         }
     },
     "CHARGING_SCHEDULE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -564,7 +564,7 @@
         }    
     },
     "CHARGING_SCHEDULE_CANCEL": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -573,7 +573,7 @@
         "DESC": "Cancel scheduled charge start."
     },
     "CHARGING_SCHEDULE_ADD": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -591,7 +591,7 @@
         }    
     },
     "CHARGING_SCHEDULE_REMOVE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -604,7 +604,7 @@
         }    
     },
     "PRECONDITION_SCHEDULE_ADD": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -622,7 +622,7 @@
         }    
     },
     "PRECONDITION_SCHEDULE_REMOVE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -648,7 +648,7 @@
         }
     },
     "VALET_MODE_OFF": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -657,7 +657,7 @@
         "DESC": "Disable valet mode."
     },
     "VALET_MODE_ON": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -690,7 +690,7 @@
         }
     },
     "SENTRY_MODE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -702,7 +702,7 @@
         }
     },
     "TONNEAU_CLOSE": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -711,7 +711,7 @@
         "DESC": "Close Cybertruck tonneau."
     },
     "TONNEAU_OPEN": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -720,7 +720,7 @@
         "DESC": "Open Cybertruck tonneau."
     },
     "TONNEAU_STOP": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -729,7 +729,7 @@
         "DESC": "Stop moving Cybertruck tonneau."
     },
     "MEDIA_SET_VOLUME": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -741,7 +741,7 @@
         }
     },
     "MEDIA_TOGGLE_PLAYBACK": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -750,7 +750,7 @@
         "DESC": "Toggle between play/pause."
     },
     "SOFTWARE_UPDATE_START": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -762,7 +762,7 @@
         }
     },
     "SOFTWARE_UPDATE_CANCEL": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -771,7 +771,7 @@
         "DESC": "Cancel a pending software update."
     },
     "GUEST_MODE_OFF": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -780,7 +780,7 @@
         "DESC": "Disable Guest Mode."
     },
     "GUEST_MODE_ON": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -789,7 +789,7 @@
         "DESC": "Enable Guest Mode. See https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#guest-mode."
     },
     "ERASE_GUEST_DATA": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -798,7 +798,7 @@
         "DESC": "Erase Guest Mode user data."
     },
     "ADD_KEY": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",
@@ -812,7 +812,7 @@
         }
     },
     "ADD_KEY_REQUEST": {
-        "API": [1],
+        "API": [1, 2],
         "TYPE": "POST",
         "TAG": "{vehicle_tag}",
         "URI": "",

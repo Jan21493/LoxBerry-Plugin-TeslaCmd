@@ -53,9 +53,9 @@ function tesla_refreshtoken()
 	global $token;
 	
 	if( !file_exists(LOGINFILE) ) {
-		
+		mqttpublish(0, "/token_valid");
 		LOGDEB("tesla_refreshtoken: Loginfile missing, aborting.");
-		LOGERR("No valid token, please login.");
+		LOGINF("No valid token, please login.");
 		return;
 	}
 	
@@ -65,8 +65,9 @@ function tesla_refreshtoken()
 	
 	// Read token
 	if( empty($login->bearer_token) ) {
+		mqttpublish(0, "/token_valid");
 		LOGDEB("tesla_refreshtoken: File data error, no token found. Fallback to re-login.");
-		LOGERR("No valid token, please login.");
+		LOGINF("No valid token, please login.");
 		return;
 	}
 	
@@ -97,12 +98,13 @@ function tesla_refreshtoken()
 		} else {
 			mqttpublish(0, "/token_valid");
 			mqttpublish(0, "/token_expires");
+			LOGINF("Failed to refresh token, please login.");
 		}
 	} else {
 		// no valid token
 		mqttpublish(0, "/token_valid");
 		mqttpublish(epoch2lox($tokenexpires), "/token_expires");
-		LOGERR("No valid token, please login.");
+		LOGINF("No valid token, please login.");
 	}
 	return $login;
 }
@@ -162,10 +164,10 @@ function tesla_checktoken()
 
 	if (is_null($data)) {
 		LOGDEB("tesla_checktoken: not valid");
-		return "false";
+		return false;
 	} else {
 		LOGDEB("tesla_checktoken: valid");
-		return "true";
+		return true;
 	}
 } 
 
@@ -1024,7 +1026,7 @@ function read_api_data()
 		$apidata->baseblecmd .= DEBUG_OPTION." ";
 	}
 	$apidata->baseblecmd .= COMMAND_TAG;
-	LOGDEB("read_api_data: base BLE command: ".$apidata->baseblecmd);
+	LOGDEB("read_api_data: base command with options: ".$apidata->baseblecmd);
 	return $apidata;
 }
 
@@ -1038,8 +1040,6 @@ function object_count($object)
 
 function read_local_ble_vehicles()
 {
-	LOGINF("read_local_ble_vehicles: Read locally mapped BLE vehicles.");
-
 	if( !file_exists(LOCALBLEFILE) ) {
 		LOGDEB("read_local_ble_vehicles: No local BLE vehicle file found.");
 		return new stdClass();
@@ -1062,12 +1062,22 @@ function write_local_ble_vehicles($vehicles)
 
 function get_local_ble_vehicle_by_vin($vin)
 {
-	$vehicles = read_local_ble_vehicles();
-	foreach ($vehicles as $mappedVehicle) {
-		if (isset($mappedVehicle->vin) && ($mappedVehicle->vin == $vin)) {
-			return $mappedVehicle;
+	static $vehiclesByVin = null;
+
+	if ($vehiclesByVin === null) {
+		$vehiclesByVin = [];
+		$vehicles = read_local_ble_vehicles();
+		foreach ($vehicles as $mappedVehicle) {
+			if (isset($mappedVehicle->vin) && ($mappedVehicle->vin !== "")) {
+				$vehiclesByVin[(string)$mappedVehicle->vin] = $mappedVehicle;
+			}
 		}
 	}
+
+	if (isset($vehiclesByVin[(string)$vin])) {
+		return $vehiclesByVin[(string)$vin];
+	}
+
 	return null;
 }
 
@@ -1301,7 +1311,7 @@ function getYearFromVIN($vin) {
 	if (strlen($vin) == 17) { 
 		$yearCode = substr($vin, 9, 1);
 		if ($yearCode >= "6" && $yearCode <= "9")
-			$year = 2000 + int($yearCode);
+			$year = 2000 + intval($yearCode);
 		if ($yearCode >= "A" && $yearCode <= "H")
 			$year = 1945 + ord($yearCode);
 		if ($yearCode >= "J" && $yearCode <= "N")
@@ -1334,19 +1344,22 @@ function getModelFromVIN($vin) {
 	return $model;
 }
 
-function getApiProtocol($vin) {
+function getApiProtocol($vin, $tokenvalid) {
 
 	if (!empty($vin) && get_local_ble_vehicle_by_vin($vin) != null) {
-		return BLE_PLUS_OWNERS_API;
+		if ($tokenvalid)
+			return BLE_PLUS_OWNERS_API;
+		else
+			return BLE_ONLY;
 	}
 
 	if (strlen($vin) == 17) {
 		$modelCode = substr($vin, 3, 1);
 		if ( (($modelCode == "Y") || ($modelCode == "S")) && (getYearFromVIN($vin) < 2021) )
-			return 0;
-		return 1;
+			return OWNERS_API;
+		return BLE_PLUS_OWNERS_API;
 	}
-	return 0;
+	return OWNERS_API;
 }
 
 function isVIN($vin) {

@@ -29,6 +29,15 @@ if (!empty($login->bearer_token)) {
     }
 }
 
+$ownerVehicles = new stdClass();
+if($tokenvalid) {
+    $ownerVehicles = tesla_summary();
+}
+$vehicles = get_all_vehicles($ownerVehicles);
+$apidata = read_api_data();
+$localBleVehicles = read_local_ble_vehicles();
+$allowWithoutToken = (object_count($localBleVehicles) > 0);
+
 $useVIN = true;
 
 // obsolete, done on client side
@@ -47,25 +56,39 @@ if(!empty($_POST["useVIN"])) {
 </style>
 
 <?php
-if($tokenvalid == "false") {
+if((!$tokenvalid) && !$allowWithoutToken) {
 ?>
 
 <!-- Status -->
 <div class="wide">Status</div>
 <p style="color:red">
-    <b>You are not logged in.</b>
+    <b>You are not logged in.</b> No locally mapped BLE vehicle with VIN was found.
 </p><br>
 
 <?php
 } else {
 ?>
 
-<!-- Queries -->
+<!-- Status -->
+<div class="wide">Status</div>
 <?php
-	$vehicles = tesla_summary();
-	$vehicles = get_all_vehicles($vehicles);
-    $apidata = read_api_data();
+if($tokenvalid) {
 ?>
+<p style="color:green">
+    <b>You are logged in, token is valid until <?=date("Y-m-d H:i:s", $tokenexpires)?>.</b>
+</p><br>
+<?php
+} else {
+?>
+<p style="color:orange">
+    <b>You are not logged in.</b> Showing locally mapped BLE vehicles and BLE-capable commands only.
+</p><br>
+<?php
+}
+?>
+
+<!-- Queries -->
+
 
 <div class="wide">Function Blocks in Loxone Config</div>
 <p>
@@ -73,7 +96,7 @@ if($tokenvalid == "false") {
 </p>
 <form>
     <div style="display: flex;"> 
-        <div style="flex: 10%; align-content: center;"><input type="checkbox" data-role="flipswitch" name="useVIN" id="useVIN" data-on-text="VIN" data-off-text="VID" data-wrapper-class="custom-label-flipswitch" <?php if ($useVIN) echo 'checked=""'; ?>></div> 
+        <div style="flex: 10%; align-content: center;"><input type="checkbox" data-role="flipswitch" name="useVIN" id="useVIN" data-on-text="VIN" data-off-text="VID" data-wrapper-class="custom-label-flipswitch" <?php if ($useVIN) echo 'checked="checked"'; if (!$tokenvalid) echo 'disabled="disabled"'; ?>></div> 
         <div style="flex: 1%; align-content: center;"></div> 
         <div style="flex: 89%; align-content: center;"><label for="useVIN"><p>Either the vehicle's VID or VIN can be used for all commands (following Tesla's API's). Using the VIN avoids retrieving it via the Owner' API, because the VIN is required for all commands via BLE.</p>
             <b>NOTE:</b> In previous versions of the plugin, only the VID was allowed.</label></div> 
@@ -102,12 +125,16 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
                 $state = $vehicle->state;
                 $vehicle_tag = "&vin=$vin";
                 $tag = VEHICLE_TAG;
-                $api = getApiProtocol($vin);
+                $api = getApiProtocol($vin, $tokenvalid);
             }
             foreach ($commands as $command => $attribute) {
                 // Get informations: TYPE is "GET" AND command is supported in selected API of vehicle (API for energy sites is always 0) AND
                 // tag is matching type of vehicle (car or energy site)
-                if (in_array($api, $attribute->API) && ($tag == $attribute->TAG)) {
+                $showCommand = in_array($api, $attribute->API) && ($tag == $attribute->TAG);
+                if ((!$tokenvalid) && empty($attribute->BLECMD)) {
+                    $showCommand = false;
+                }
+                if ($showCommand) {
                     $command_get = "";
                     if (isset($commands->{strtoupper($command)}->PARAM)) {
                         foreach ($commands->{strtoupper($command)}->PARAM as $param => $param_desc) {
@@ -134,12 +161,16 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
                 $state = $vehicle->state;
                 $vehicle_tag = "&vid=$vid";                
                 $tag = "{vehicle_tag}";
-                $api = getApiProtocol($vin);
+                $api = getApiProtocol($vin, $tokenvalid);
             }
             foreach ($commands as $command => $attribute) {
                 // Get informations: TYPE is "GET" AND command is supported in selected API of vehicle (API for energy sites is always 0) AND
                 // tag is matching type of vehicle (car or energy site)
-                if (in_array($api, $attribute->API) && $tag == $attribute->TAG) {
+                $showCommand = in_array($api, $attribute->API) && ($tag == $attribute->TAG);
+                if ((!$tokenvalid) && empty($attribute->BLECMD)) {
+                    $showCommand = false;
+                }
+                if ($showCommand) {
                     $command_get = "";
                     if (isset($commands->{strtoupper($command)}->PARAM)) {
                         foreach ($commands->{strtoupper($command)}->PARAM as $param => $param_desc) {
@@ -193,7 +224,7 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
         if ($attribute->TYPE == "GET") {
             // General commands: TYPE is "GET" and specific tag is NOT included in URL, there are no general commands for BLE
             // Same commands for cars/vehicles and energy sites
-            if (empty($attribute->TAG)) {				
+            if (empty($attribute->TAG) && $tokenvalid) {				
 ?>
 
 <div style="display:flex; align-items: center; justify-content: center;">
@@ -246,7 +277,7 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
                 $vehicle_tag = "&vid=$vid";                
             $info = $vehicle->display_name. " (VID: " . $vid . ", VIN: ".$vin . ")";
             $tag = VEHICLE_TAG;
-            $api = getApiProtocol($vin);
+            $api = getApiProtocol($vin, $tokenvalid);
         }
 ?>
 
@@ -276,6 +307,9 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
         // Get informations: TYPE is "GET" AND command is supported in selected API of vehicle (API for energy sites is always 0) AND
         // tag is matching type of vehicle (car or energy site)
 	    if (($attribute->TYPE == "GET") && in_array($api, $attribute->API) && $tag == $attribute->TAG) {
+            if ((!$tokenvalid) && empty($attribute->BLECMD)) {
+                continue;
+            }
             $command_get = "";
             if (isset($commands->{strtoupper($command)}->PARAM)) {
                 foreach ($commands->{strtoupper($command)}->PARAM as $param => $param_desc) {
@@ -325,6 +359,9 @@ $( document ).on( "change", "#useVIN",  function( event, ui ) {
 			foreach ($commands as $command => $attribute) {
                 // Send commands: TYPE is "POST" AND it is a vehicle AND command is supported in selected API of vehicle AND tag is defined for command
 				if (($attribute->TYPE == "POST") && in_array($api, $attribute->API) && $tag == $attribute->TAG) {
+                    if ((!$tokenvalid) && empty($attribute->BLECMD)) {
+                        continue;
+                    }
 				    $command_get = "";
 					if (isset($commands->{strtoupper($command)}->PARAM)) {
 						foreach ($commands->{strtoupper($command)}->PARAM as $param => $param_desc) {

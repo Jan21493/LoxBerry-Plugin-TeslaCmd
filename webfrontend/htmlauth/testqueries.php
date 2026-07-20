@@ -21,10 +21,14 @@ $L = LBSystem::readlanguage("language.ini");
 LBWeb::lbheader($template_title, $helplink, $helptemplate);
 
 // $type contains either "General" or the selected vehicle ID
+$vid = "";
 if(!empty($_REQUEST["type"])) { 
-	$type = strtoupper($_REQUEST["type"]);
-	if ($type !== "GENERAL")
+	$type = strval($_REQUEST["type"]);
+	if (strcasecmp($type, "GENERAL") === 0) {
+		$type = "GENERAL";
+	} else {
 		$vid = $type;
+	}
 } else {
 	$type = "GENERAL";
 }
@@ -45,6 +49,32 @@ if (!empty($login->bearer_token)) {
         $tokenexpires = json_decode( base64_decode($tokenparts[1]) )->exp;
     }
 }
+
+$ownerVehicles = new stdClass();
+if($tokenvalid) {
+	$ownerVehicles = tesla_summary();
+}
+$vehicles = get_all_vehicles($ownerVehicles);
+$apidata = read_api_data();
+$baseblecmd = $apidata->baseblecmd;
+$localBleVehicles = read_local_ble_vehicles();
+$allowWithoutToken = (object_count($localBleVehicles) > 0);
+
+$vin = "";
+$force = "";
+$command = null;
+$selected_vehicle = null;
+$selected_info = "";
+
+if ((!$tokenvalid) && ($type == "GENERAL")) {
+	foreach ($vehicles as $vehicle) {
+		if (isset($vehicle->vin) && !empty($vehicle->vin)) {
+			$type = strval($vehicle->id);
+			$vid = $type;
+			break;
+		}
+	}
+}
 ?>
 
 <style>
@@ -61,13 +91,13 @@ if (!empty($login->bearer_token)) {
 
 <?php
 // if($tokenvalid == "false")
-if($tokenvalid == "false") {
+if((!$tokenvalid) && !$allowWithoutToken) {
 ?>
 
 <!-- Status -->
 <div class="wide">Status</div>
 <p style="color:red">
-    <b>You are not logged in.</b>
+	<b>You are not logged in.</b> No locally mapped BLE vehicle with VIN was found.
 </p>
 <br>
 
@@ -78,10 +108,16 @@ if($tokenvalid == "false") {
 
 <!-- Queries -->
 <?php
-	$vehicles = tesla_summary();
-    $vehicles = get_all_vehicles($vehicles);
-    $apidata = read_api_data();
-	$baseblecmd = $apidata->baseblecmd;
+	if(!$tokenvalid) {
+?>
+<div class="wide">Status</div>
+<p style="color:orange">
+	<b>You are not logged in.</b> Only BLE-capable vehicle commands are available.
+</p>
+<br>
+<?php
+	}
+
 	if (isset($vid) && isset($vehicles->{"$vid"})) {
 		$selected_vehicle = $vehicles->{"$vid"};
 		if(isset($selected_vehicle->vin)) {
@@ -102,8 +138,8 @@ if($tokenvalid == "false") {
 				$force = "";
 			// $command contains the selected command
 			$command = $commands->{"$action"};
-			$uri = $command->URI;
-			$blecmd = $command->BLECMD;
+			$uri = isset($command->URI) ? $command->URI : "";
+			$blecmd = isset($command->BLECMD) ? $command->BLECMD : "";
 			$send_command = true;
 		}
 	}
@@ -123,9 +159,11 @@ if($tokenvalid == "false") {
 			<td width="40%">
 				<!--Build drop down selection list with 'General' and each vehicle / energy site-->
 				<select name="type" onchange="self.location='?type='+this.options[this.selectedIndex].value;">
+					<?php if($tokenvalid) { ?>
 					<option value="General" <?php if($type == "GENERAL"){ echo " selected"; } ?>>
 						General
 					</option>
+					<?php } ?>
 
 <?php
 	// foreach vehicle
@@ -145,7 +183,7 @@ if($tokenvalid == "false") {
 		} else {
 			$tag = strval($vehicle->id);
 			$name = $vehicle->display_name;
-			$info = "VID: ".$tag.", VIN: ".strval($vehicle->vin).", using <span class=\"mono\">".$apinames[getApiProtocol($vehicle->vin)]."</span>";
+			$info = "VID: ".$tag.", VIN: ".strval($vehicle->vin).", using <span class=\"mono\">".$apinames[getApiProtocol($vehicle->vin, $tokenvalid)]."</span>";
 		}
 ?>
 					<option value="<?=$tag;?>" <?php if($type == $tag){ echo " selected"; $selected_info = $info; $selected_vehicle = $vehicle; }?>>
@@ -177,7 +215,7 @@ if($tokenvalid == "false") {
 <?php
 		foreach ($commands as $cmd => $attribute) {
 			// 'general' commands don't have a tag
-			if ($type == "GENERAL" && empty($attribute->TAG)) {
+			if (($type == "GENERAL") && $tokenvalid && empty($attribute->TAG)) {
 ?>
 					<option value="<?=$cmd;?>" <?php if($cmd == $action){ echo " selected"; $command = $attribute; } ?>>
 					<?=$cmd;?>
@@ -193,7 +231,11 @@ if($tokenvalid == "false") {
 				}
 				// show command if it is matching the selected API, TAG is defined for the command and matching the vehicle / energy site
 				// energy sites have empty vin, so Owner's API is choosen, API for vehicles is calculated by VIN
-				if (in_array(getApiProtocol($vin), $attribute->API) && !empty($attribute->TAG) && ($tag == $attribute->TAG)) {
+				$showCommand = in_array(getApiProtocol($vin, $tokenvalid), $attribute->API) && !empty($attribute->TAG) && ($tag == $attribute->TAG);
+				if ((!$tokenvalid) && empty($attribute->BLECMD)) {
+					$showCommand = false;
+				}
+				if ($showCommand) {
 ?>
 					<option value="<?=$cmd;?>" <?php if($cmd == $action){ echo " selected"; $command = $attribute; } ?>>
 					<?=$cmd;?>
@@ -208,7 +250,7 @@ if($tokenvalid == "false") {
 			</td>
 			<td width="1%" align=right>
 <?php
-            	if (!empty($command->BLECMD)) {   
+	            	if (isset($command->BLECMD) && !empty($command->BLECMD)) {   
                 	echo '<img src="./images/Bluetooth.svg" alt="BLE" height="15" ></img>';
             	} else {
 					echo '&nbsp;';
@@ -217,7 +259,7 @@ if($tokenvalid == "false") {
 			</td>
 			<td>
 				<p class="hint">
-					<?=$command->DESC;?>
+					<?=isset($command->DESC) ? $command->DESC : "Please select a command.";?>
 				</p>
 			</td>
 		</tr>
@@ -227,7 +269,7 @@ if($tokenvalid == "false") {
 			<td>
 <?php
 		// wake up is available for vehicles only, not if a wake up command is selected, and not if body-controller-state is requested
-		if (($type == $vid) && (!empty($vin)) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && ($command->BLECMD != "wake")) {
+		if (($type == $vid) && (!empty($vin)) && ($action != "BODY_CONTROLLER_STATE") && ($action != "WAKE_UP") && isset($command->BLECMD) && ($command->BLECMD != "wake")) {
 ?>				
                     <fieldset data-role="controlgroup">
                         <input
@@ -352,8 +394,11 @@ if($tokenvalid == "false") {
 					}
 				}
 				if (!$command_error) {
-					// select API - either owner's api or vehicle command via ble 
-					if (getApiProtocol($vin) == OWNERS_API || empty($blecmd)) {
+					if ((!$tokenvalid) && empty($blecmd)) {
+						$command_error = true;
+						$commandoutput = "This command requires Owner's API and a valid token. Only BLE-capable commands are available without token.\n";
+						LOGERR("testqueries: command requires Owner's API token");
+					} else if ($tokenvalid && (getApiProtocol($vin, $tokenvalid) == OWNERS_API || empty($blecmd))) {
 						LOGDEB("testqueries: sending command via Internet (Owner's API) ... ");
 						if (empty($vin)) {
 							LOGOK("testqueries: using ID: $vid, action: $action ".$command_post_print.($force ? ", force: $force" : ""));
@@ -376,9 +421,15 @@ if($tokenvalid == "false") {
 
 			} else {
 				// general command - owner's api only
-				LOGOK("testqueries: action: $action");
-				//[x] removed $vid
-				$commandoutput = tesla_query( "", $action, $command_post );
+				if (!$tokenvalid) {
+					$command_error = true;
+					$commandoutput = "General queries require Owner's API and a valid token.\n";
+					LOGERR("testqueries: general command requires Owner's API token");
+				} else {
+					LOGOK("testqueries: action: $action");
+					//[x] removed $vid
+					$commandoutput = tesla_query( "", $action, $command_post );
+				}
 			}
 		} else {
 			$commandoutput =  "Command not found\n";
@@ -400,9 +451,9 @@ if($tokenvalid == "false") {
 
 		if (isset($commandoutput)) {
 			if (!$command_error) {
-				if (in_array(getApiProtocol($vin), $command->API)) {
+				if (isset($command->API) && in_array(getApiProtocol($vin, $tokenvalid), $command->API)) {
 					echo "<br>Translated by TeslaConnect Plugin on Loxberry and send using <span class=\"mono\">";
-					if (getApiProtocol($vin) == OWNERS_API || empty($blecmd)) {
+					if ($tokenvalid && (getApiProtocol($vin, $tokenvalid) == OWNERS_API || empty($blecmd))) {
 						if (isset($command->URI)) { 
 							echo $apinames[OWNERS_API]."</span> as TLS GET Request with Bearer-Token to:<br><span class=\"mono\">".BASEURL.$uri."</span><br>"; 
 						}

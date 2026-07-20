@@ -33,7 +33,7 @@ if (!empty($login->bearer_token)) {
     }
 }
 $ownerVehicles = new stdClass();
-if($tokenvalid == "true") {
+if($tokenvalid) {
     $ownerVehicles = tesla_summary();
 }
 $vehicles = get_all_vehicles($ownerVehicles);
@@ -86,6 +86,35 @@ $localBleVehicles = read_local_ble_vehicles();
         text-decoration: none !important;
         line-height: 1 !important;
         -webkit-font-smoothing: antialiased;
+    }
+    .ble-retries-cell .ui-radio {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+    .ble-retries-cell .ui-radio .ui-btn {
+        margin-top: 0;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+    }
+    .ble-retries-cell .ui-radio .ui-btn-icon-left:after {
+        top: 50% !important;
+        margin-top: 0 !important;
+        transform: translateY(-50%);
+    }
+    .ble-retries-cell .ui-radio input[type="radio"] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        margin: -1px !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0 0 0 0) !important;
+        clip-path: inset(50%) !important;
+        white-space: nowrap !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 
 </style>
@@ -170,7 +199,7 @@ $localBleVehicles = read_local_ble_vehicles();
 <div class="wide">Status</div>
 
 <?php
-if($tokenvalid == "true") {
+if($tokenvalid) {
 ?>
 
 <p style="color:green">
@@ -228,7 +257,7 @@ if (isset($_GET['delete_token'])) {
 	}
 }
 
-if($tokenvalid == "false") {
+if(!$tokenvalid) {
 		// $challenge = gen_challenge();
 		// $code_verifier = $challenge["code_verifier"];
 		// $code_challenge = $challenge["code_challenge"];
@@ -303,7 +332,7 @@ You can use one of the following apps or browser extention to generate an Access
 
 <!-- API -->
 <?php
-if($tokenvalid == "true") {
+if($tokenvalid) {
 ?>    
 <div class="wide">API selection</div>
 <p>Tesla has introduced a new <a href="https://github.com/teslamotors/vehicle-command/blob/main/README.md" target=”_blank”>Tesla Vehicle Command SDK</a> in October 2023 
@@ -353,7 +382,7 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
 				<td><?php echo getYearFromVIN($vehicle->vin); ?></td>
 				<td><?php echo $vehicle->display_name; ?></td>
 				<td><?php echo $vehicle->state; ?></td>
-				<td><?php echo $apinames[getApiProtocol($vehicle->vin)]; ?></td>
+				<td><?php echo $apinames[getApiProtocol($vehicle->vin, $tokenvalid)]; ?></td>
 			</tr>
 
 <?php
@@ -549,9 +578,9 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
                 <strong>Retry BLE command</strong><br>
                 <span class="hint">Define how often the BLE command is retried in case an error is returned to increase reliability. Note: it may take longer to execute the command.</span>
             </td>
-            <td><input type="radio" id="ble_retries0" name="ble_retries" data-mini="true" value="0" <?php if ($bleRetries === 0) echo 'checked="checked"'; ?>/><label for="ble_retries0">No retry</label></td>
-            <td><input type="radio" id="ble_retries1" name="ble_retries" data-mini="true" value="1" <?php if ($bleRetries === 1) echo 'checked="checked"'; ?>/><label for="ble_retries1">Retry once</label></td>
-            <td><input type="radio" id="ble_retries2" name="ble_retries" data-mini="true" value="2" <?php if ($bleRetries === 2) echo 'checked="checked"'; ?>/><label for="ble_retries2">Retry twice</label></td>
+            <td class="ble-retries-cell"><input type="radio" id="ble_retries0" name="ble_retries" data-mini="true" value="0" <?php if ($bleRetries === 0) echo 'checked="checked"'; ?>/><label for="ble_retries0">No retry</label></td>
+            <td class="ble-retries-cell"><input type="radio" id="ble_retries1" name="ble_retries" data-mini="true" value="1" <?php if ($bleRetries === 1) echo 'checked="checked"'; ?>/><label for="ble_retries1">Retry once</label></td>
+            <td class="ble-retries-cell"><input type="radio" id="ble_retries2" name="ble_retries" data-mini="true" value="2" <?php if ($bleRetries === 2) echo 'checked="checked"'; ?>/><label for="ble_retries2">Retry twice</label></td>
         </tr>
     </table>   
     <input type="submit" value="Save Vehicle Command API settings">
@@ -938,7 +967,7 @@ function installKeysStep3( vin ) {
      // foreach vehicle
 	foreach ($vehicles as $index => &$vehicle) {
         // only cars are shown, no energy sites
-		if (!isset($vehicle->energy_site_id) && getApiProtocol($vehicle->vin)) {
+		if (!isset($vehicle->energy_site_id) && getApiProtocol($vehicle->vin, $tokenvalid)) {
             $rssi = null;
 ?>
 			<tr>

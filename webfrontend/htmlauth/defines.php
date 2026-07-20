@@ -54,6 +54,7 @@ $lbzeurl = "/admin/plugins/".LBPPLUGINDIR."/send.php";
 
 const OWNERS_API = 0;
 const BLE_PLUS_OWNERS_API = 1;
+const BLE_ONLY = 2;
 
 const UNKNOWN_KEY = 0;
 const PUBLIC_KEY = 1;
@@ -67,6 +68,7 @@ $keyTypeNames[PRIVATE_KEY] = "private key";
 $apinames = array();
 $apinames[OWNERS_API] = "(inofficial) Owner's API";
 $apinames[BLE_PLUS_OWNERS_API] = "Owner's plus Vehicle Command API via BLE";
+$apinames[BLE_ONLY] = "Vehicle Command API via BLE only";
 
 // The Navigation Bar
 $navbar[1]['Name'] = "Settings";
@@ -76,7 +78,6 @@ $navbar[2]['URL'] = 'queries.php';
 $navbar[3]['Name'] = "Test queries";
 $navbar[3]['URL'] = 'testqueries.php';
 $navbar[99]['Name'] = "Logfiles";
-$navbar[99]['URL'] = '/admin/system/logmanager.cgi?package='.LBPPLUGINDIR;
-$navbar[99]['target'] = '_blank';
+$navbar[99]['URL'] = 'logfiles.php';
 
 ?>

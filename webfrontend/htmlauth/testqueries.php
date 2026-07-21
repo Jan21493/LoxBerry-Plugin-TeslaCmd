@@ -116,8 +116,13 @@ if((!$tokenvalid) && !$allowWithoutToken) {
 </p>
 <br>
 <?php
-	}
-
+	} else {
+?>
+<p style="color:green">
+    <b>You are logged in, token is valid until <?=date("Y-m-d H:i:s", $tokenexpires)?>.</b>
+</p><br>
+<?php
+	} 
 	if (isset($vid) && isset($vehicles->{"$vid"})) {
 		$selected_vehicle = $vehicles->{"$vid"};
 		if(isset($selected_vehicle->vin)) {
@@ -125,7 +130,6 @@ if((!$tokenvalid) && !$allowWithoutToken) {
 		} else {
 			$vin = "";
 		}
-
 	}
 	$send_command = false;
 	// submit button was pressed and query should be send

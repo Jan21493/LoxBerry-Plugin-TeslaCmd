@@ -43,7 +43,7 @@ if (isset($_REQUEST["rssi"]) && is_numeric($_REQUEST["rssi"])) {
 	$entry->rssi = (int)$_REQUEST["rssi"];
 }
 $entry->state = "local via BLE";
-$entry->last_seen = date("Y-m-d H:i:s");
+$entry->discovered = date("Y-m-d H:i:s");
 
 $vehicles->{$vin} = $entry;
 write_local_ble_vehicles($vehicles);

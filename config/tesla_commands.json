@@ -135,6 +135,12 @@
         "DESC": "Fetch limited vehicle state information. Works over BLE even when infotainment / vehicle is asleep. NO private key authentication is required.",
         "PARAM": {
             "output": "The desired output format, either 'enums' or 'numbers'; defaults to 'numbers' if omitted."
+        },
+        "PARAM_OPTIONS": {
+            "output": ["enums", "numbers"]
+        },
+        "PARAM_DEFAULTS": {
+            "output": "numbers"
         }
     },
     "STATE": {
@@ -148,6 +154,13 @@
         "PARAM": {
             "category": "One of 'tire-pressure', 'parental-controls', 'closures', 'charge-schedule', 'drive', 'location', 'precondition-schedule', 'media', 'media-detail', 'software-update', 'charge', or 'climate'.",
             "output": "The desired output format, either 'enums' or 'numbers'; defaults to 'enums' if omitted."
+        },
+        "PARAM_OPTIONS": {
+            "category": ["tire-pressure", "parental-controls", "closures", "charge-schedule", "drive", "location", "precondition-schedule", "media", "media-detail", "software-update", "charge", "climate"],
+            "output": ["enums", "numbers"]
+        },
+        "PARAM_DEFAULTS": {
+            "output": "enums"
         }
     },
     "WAKE_UP": {
@@ -223,6 +236,9 @@
         "DESC": "Controls the panoramic sunroof on the Model S.",
         "PARAM": {
             "state": "The amount to open the sunroof. Currently this only allows the values 'vent' and 'close'."
+        },
+        "PARAM_OPTIONS": {
+            "state": ["vent", "close"]
         }
     },
     "WINDOW_CONTROL": {
@@ -353,6 +369,13 @@
         "PARAM": {
             "positions": "The desired seat: 'L' (left), 'R' (right), or 'LR'.",
             "state": "The desired state: 'on' or 'off'. Defaults to 'on' if omitted."
+        },
+        "PARAM_OPTIONS": {
+            "positions": ["L", "R", "LR"],
+            "state": ["on", "off"]
+        },
+        "PARAM_DEFAULTS": {
+            "state": "on"
         }
     },
     "SET_TEMPS": {
@@ -440,6 +463,9 @@
         "DESC": "Turn steering wheel heater on or off.",
         "PARAM": {
             "state": "'on' or 'off'."
+        },
+        "PARAM_OPTIONS": {
+            "state": ["on", "off"]
         }
     },
     "CHARGE_PORT_DOOR_OPEN": {
@@ -588,6 +614,14 @@
             "repeat": "Set to 'once' or 'weekly'. Omit to repeat weekly if this is the last parameter to enter.",
             "id": "The ID of the charge schedule to modify. Always set to current (Linux) time. Enter a dummy value, e.g. 1 if this is not the last parameter.",
             "enabled": "Whether the charge schedule is enabled. Expects 'true' or 'false'. Defaults to 'true' if omitted."
+        },
+        "PARAM_OPTIONS": {
+            "repeat": ["once", "weekly"],
+            "enabled": ["true", "false"]
+        },
+        "PARAM_DEFAULTS": {
+            "repeat": "weekly",
+            "enabled": "true"
         }    
     },
     "CHARGING_SCHEDULE_REMOVE": {
@@ -601,6 +635,9 @@
         "PARAM": {
             "type": "Either 'home', 'work', 'other', or 'id'.",
             "id": "The numeric ID of the charge schedule to remove when TYPE is set to 'id', otherwise omit it."
+        },
+        "PARAM_OPTIONS": {
+            "type": ["home", "work", "other", "id"]
         }    
     },
     "PRECONDITION_SCHEDULE_ADD": {
@@ -619,6 +656,14 @@
             "repeat": "Set to 'once' or 'weekly'. Omit to repeat weekly if this is the last parameter to enter.",
             "id": "The ID of the precondition schedule to modify. Always set to current (Linux) time. Enter a dummy value, e.g. 1 if this is not the last parameter.",
             "enabled": "Whether the precondition schedule is enabled. Expects 'true' or 'false'. Defaults to 'true' if omitted."
+        },
+        "PARAM_OPTIONS": {
+            "repeat": ["once", "weekly"],
+            "enabled": ["true", "false"]
+        },
+        "PARAM_DEFAULTS": {
+            "repeat": "weekly",
+            "enabled": "true"
         }    
     },
     "PRECONDITION_SCHEDULE_REMOVE": {
@@ -632,6 +677,9 @@
         "PARAM": {
             "type": "Either 'home', 'work', 'other', or 'id'.",
             "id": "The numeric ID of the precondition schedule to remove when TYPE is set to 'id', otherwise omit it."
+        },
+        "PARAM_OPTIONS": {
+            "type": ["home", "work", "other", "id"]
         }    
     },
     "SET_VALET_MODE": {
@@ -699,6 +747,9 @@
         "DESC": "Turns sentry mode on or off.",
         "PARAM": {
             "state": "'on' or 'off'."
+        },
+        "PARAM_OPTIONS": {
+            "state": ["on", "off"]
         }
     },
     "TONNEAU_CLOSE": {
@@ -809,6 +860,10 @@
             "public_key": "File containing public key (or corresponding private key).",
 			"role": "One of: 'owner', 'driver', 'fm' (fleet manager), 'vehicle_monitor', or 'charging_manager'.",
 			"form_factor": "One of: 'nfc_card', 'ios_device', 'android_device', or 'cloud_key'."
+        },
+        "PARAM_OPTIONS": {
+            "role": ["owner", "driver", "fm", "vehicle_monitor", "charging_manager"],
+            "form_factor": ["nfc_card", "ios_device", "android_device", "cloud_key"]
         }
     },
     "ADD_KEY_REQUEST": {
@@ -823,6 +878,10 @@
             "public_key": "File containing public key (or corresponding private key).",
 			"role": "One of: 'owner', 'driver', 'fm' (fleet manager), 'vehicle_monitor', or 'charging_manager'.",
 			"form_factor": "One of: 'nfc_card', 'ios_device', 'android_device', or 'cloud_key'."
+        },
+        "PARAM_OPTIONS": {
+            "role": ["owner", "driver", "fm", "vehicle_monitor", "charging_manager"],
+            "form_factor": ["nfc_card", "ios_device", "android_device", "cloud_key"]
         }
     },
     "LIVE_STATUS": {
@@ -976,6 +1035,9 @@
         "DESC": "Update storm watch participation.",
         "PARAM": {
             "enabled": "The storm mode participation value to set. Set 'true' to turn on, 'false' to turn it off."
+        },
+        "PARAM_OPTIONS": {
+            "enabled": ["true", "false"]
         }
     },
     "TIME_OF_USE_SETTINGS": {

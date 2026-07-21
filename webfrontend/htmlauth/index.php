@@ -166,6 +166,19 @@ $localBleVehicles = read_local_ble_vehicles();
     </div>
 </div>
 
+<!-- Popup: Edit local BLE mapping -->
+<div data-role="popup" id="popupEditBleVehicle" data-dismissible="true" style="max-width:500px;" data-theme="a" class="ui-corner-all">
+    <div style="padding: 20px 20px; text-align: left;">
+        <h3 class="ui-title">Edit local BLE mapping</h3>
+        <input type="hidden" id="editBleOldVin" value="">
+        <label for="editBleVin">VIN</label>
+        <input type="text" id="editBleVin" value="" maxlength="17" placeholder="Enter VIN">
+        <label for="editBleName">Name</label>
+        <input type="text" id="editBleName" value="" placeholder="Enter display name">
+        <a href="#" id="btneditblevehicle" class="ui-btn ui-corner-all ui-shadow ui-btn-icon-left ui-icon-check" data-transition="flow">Save</a>
+    </div>
+</div>
+
 <!-- Popup: Install Public Key in Car -->
 <div data-role="popup" id="popupInstallKeys" data-dismissible="true" style="max-width:800px;" data-theme="a" class="ui-corner-all">
     <div style="padding: 20px 20px; text-align: left;">
@@ -196,8 +209,14 @@ $localBleVehicles = read_local_ble_vehicles();
 </div>
 
 <!-- Status -->
-<div class="wide">Status</div>
+<h1>Status</h1>
 
+<p>Tesla has introduced the <a href="https://github.com/teslamotors/vehicle-command/blob/main/README.md" target="_blank">Tesla Vehicle Command SDK</a> in October 2023 
+as a successor of the <a href="https://tesla-api.timdorr.com/">(inofficial) Owner's API</a>. 
+Pre-2021 model S and X vehicles do not support this new protocol, but all other models will be shifted to the new protocol in 2024.</p> 
+
+<p>This plugin supports both APIs. You can use it with either the new Tesla Vehicle Command SDK via BLE only or in combination with the (inofficial) Owner's API. If you choose the latter,
+you will need to log in to your Tesla owner account<a href="login.php">here</a>, but you will get all vehicles in your account with their VINs.</p>
 <?php
 if($tokenvalid) {
 ?>
@@ -212,7 +231,7 @@ if($tokenvalid) {
 } else {
 ?>
 
-<p style="color:red">
+<p style="color:orange">
     <b>You are not logged in.</b> You can still add vehicles locally via BLE scan below.
 </p><br>
 
@@ -264,7 +283,7 @@ if(!$tokenvalid) {
 		// $state = $challenge["state"];
 		// $timestamp = time();
 ?>
-<div class="wide">Login</div>
+<h1>Login to Tesla Owner Account via Token</h1>
 
 <p>Enter the Access Token & Refresh Token:<br><br>
 
@@ -331,13 +350,10 @@ You can use one of the following apps or browser extention to generate an Access
 ?>
 
 <!-- API -->
+<h1>API selection</h1>
 <?php
 if($tokenvalid) {
 ?>    
-<div class="wide">API selection</div>
-<p>Tesla has introduced a new <a href="https://github.com/teslamotors/vehicle-command/blob/main/README.md" target=”_blank”>Tesla Vehicle Command SDK</a> in October 2023 
-as a successor of the <a href="https://tesla-api.timdorr.com/">(inofficial) Owner's API</a>. 
-Pre-2021 model S and X vehicles do not support this new protocol, but all other models will be shifted to the new protocol in 2024.</p> 
 
 <style>
     .table-ui-title {
@@ -349,7 +365,8 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
 }
 </style>
 <div class="form-group" id="vehicleTable">
-<div class="table-ui-title">Vehicles and energy sites in your Tesla account - via <?php echo $apinames[OWNERS_API]; ?><span id="colTogglePlaceholder"></span></div>
+<h2>Vehicles and energy sites in your Tesla account - via <?php echo $apinames[OWNERS_API]; ?><span id="colTogglePlaceholder"></span></h2>
+
 	<table data-role="table" data-mode="columntoggle" data-filter="true" data-input="#filterTable-input" class="ui-body-d ui-shadow table-stripe ui-responsive" data-column-btn-text="Show columns">
 		<thead>
 		<tr class="ui-bar-d">
@@ -426,7 +443,6 @@ Pre-2021 model S and X vehicles do not support this new protocol, but all other 
 	}
 else {
 ?>
-<div class="wide">API selection</div>
 <p>The list of vehicles from your Tesla account is only available with a valid token. You can still add vehicles locally via BLE scan below.</p>
 <?php
 }
@@ -437,15 +453,15 @@ else {
     $(".ui-table-columntoggle-btn").appendTo("#colTogglePlaceholder");
 });
 </script>
-<br><br>
-<div class="wide">Vehicles found locally via BLE scan</div>
+<br>
+<h2>Vehicles found locally via BLE scan</h2>
 
 <p>Instead of using a token, you can search for nearby Tesla vehicles locally via BLE. Select a scanned vehicle and store its VIN mapping in the plugin.</p>
 <p>
     <a href="javascript:startBleScan()" class="ui-btn ui-corner-all ui-shadow ui-btn-inline ui-icon-search ui-btn-icon-left">Search vehicles via BLE</a>
 </p>
-<div id="bleScanMessage" class="hint"></div>
-<div class="form-group">
+<div id="bleScanMessage" class="hint">No scan active</div>
+<div class="form-group" id="bleScanTableWrapper" style="display:none;">
     <table data-role="table" class="ui-body-d ui-shadow table-stripe ui-responsive">
         <thead>
             <tr class="ui-bar-d">
@@ -474,8 +490,8 @@ else {
                 <th>Local name</th>
                 <th>VIN</th>
                 <th>Name</th>
-                <th>Last RSSI</th>
-                <th>Last seen</th>
+                <th>Discovered RSSI</th>
+                <th>Discovered at</th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -495,8 +511,10 @@ else {
                 <td><?php echo $localVehicle->vin; ?></td>
                 <td><?php echo $localVehicle->display_name; ?></td>
                 <td><?php echo isset($localVehicle->rssi) ? $localVehicle->rssi : "-"; ?></td>
-                <td><?php echo empty($localVehicle->last_seen) ? "-" : $localVehicle->last_seen; ?></td>
+                <td><?php echo empty($localVehicle->discovered) ? (empty($localVehicle->last_seen) ? "-" : $localVehicle->last_seen) : $localVehicle->discovered; ?></td>
                 <td>
+                    <a href="#" onclick='editBleVehicle(<?php echo json_encode($localVehicle->vin); ?>, <?php echo json_encode($localVehicle->display_name); ?>); return false;' class="bluebutton pi pi-pencil ui-link"
+                        title="Edit local BLE mapping."></a>
                     <a href="javascript:deleteBleVehicle('<?php echo $localVehicle->vin; ?>')" class="redbutton pi pi-trash ui-link"
                         title="Delete local BLE mapping."></a>
                 </td>
@@ -510,7 +528,7 @@ else {
 </div>
 <br><br>
 <!-- Vehicle Command API -->
-<div class="wide">Vehicle Command API settings </div>
+<h1>Vehicle Command API settings </h1>
 
 <p>The Tesla Vehicle Command SDK includes the <a href="https://github.com/teslamotors/vehicle-command/tree/main/cmd/tesla-control#tesla-control-utility" target=”_blank”>Tesla Control Utility</a>,
 a command-line interface for sending commands to Tesla vehicles either via Bluetooth Low Energy (BLE) or over the Internet (OAuth token required!).</p>
@@ -623,12 +641,15 @@ function startBleScan() {
     .done(function(response) {
         if (response.success == 1) {
             renderBleScanResults(response.scanResults);
+            $("#bleScanTableWrapper").show();
             $("#bleScanMessage").html("BLE scan finished.");
         } else {
+            $("#bleScanTableWrapper").hide();
             $("#bleScanMessage").html(response.message);
         }
     })
     .fail(function(xhr) {
+        $("#bleScanTableWrapper").hide();
         var response = xhr.responseJSON;
         if (response && response.message) {
             $("#bleScanMessage").html(response.message);
@@ -683,6 +704,44 @@ function deleteBleVehicle(vin) {
             $("#bleScanMessage").html(response.message);
         } else {
             $("#bleScanMessage").html("Deleting BLE mapping failed.");
+        }
+    });
+}
+
+function editBleVehicle(vin, displayName) {
+    $("#editBleOldVin").val(vin);
+    $("#editBleVin").val(vin);
+    $("#editBleName").val(displayName || "");
+    $("#btneditblevehicle").attr("href", "javascript:saveEditedBleVehicle();");
+    $("#popupEditBleVehicle").popup("open");
+}
+
+function saveEditedBleVehicle() {
+    var oldVin = $.trim($("#editBleOldVin").val());
+    var vin = $.trim($("#editBleVin").val()).toUpperCase();
+    var displayName = $.trim($("#editBleName").val());
+    $("#bleScanMessage").html("Saving BLE mapping changes ...");
+
+    $.ajax({
+        url: "./editblevehicle.php",
+        method: "POST",
+        data: {
+            old_vin: oldVin,
+            vin: vin,
+            display_name: displayName
+        }
+    })
+    .done(function(response) {
+        $("#bleScanMessage").html(response.message);
+        $("#popupEditBleVehicle").popup("close");
+        location.replace(location.href);
+    })
+    .fail(function(xhr) {
+        var response = xhr.responseJSON;
+        if (response && response.message) {
+            $("#bleScanMessage").html(response.message);
+        } else {
+            $("#bleScanMessage").html("Updating BLE mapping failed.");
         }
     });
 }
@@ -934,8 +993,9 @@ function installKeysStep3( vin ) {
 
 </script>
 
+<h1>Vehicles managed by plugin via Vehicle Command API</h1>
 <p style="color:green">
-    <b>The following devices are using the Vehicle Command API.</b>   
+    <b>The following devices are supported by the Vehicle Command API and can be controlled and monitored via BLE.</b>   
 </p>
 <p>In the first step you have to generate a public/private key pair by clicking on the "+" icon. In the next step the public key 
    needs to be send to the vehicle by clicking on the blue vehicle icon that appears if a keypair has been found for that vehicle.  
@@ -1031,14 +1091,32 @@ function installKeysStep3( vin ) {
 <br><br>
 
 <!-- MQTT -->
-<div class="wide">MQTT</div>
-<p>All data is transferred via MQTT. The subscription for this is
+<h1>MQTT</h1>
+<?php
+    LBSystem::read_generaljson();
+    global $cfg;
+    $mqttcred = mqtt_connectiondetails();
+    $mqttgatewayversion = isset($cfg->Mqtt->Gatewayversion) ? (int)$cfg->Mqtt->Gatewayversion : null;
+    $mqttgatewayv2 = ($mqttgatewayversion === 2);
+    if ($mqttgatewayv2) {
+?>
+<p>All data is transferred via MQTT. <span style="color:green; font-weight:bold">MQTT gateway version 2 is detected.</span> There is no automatic subscription for all topics! You have to subscribe to the topics you like to transmit to your miniserver(s). See LoxWiki for details. Basic workflow:</p>
+<ol>
+    <li>Open menu <b><i>'MQTT Gateway'</i></b>, tab <b><i>'Subscriptions'</i></b> and subscribe (check) the topics you like to transmit to your miniserver. You may need to expand folders. Do not subscribe to a whole folder, because it includes all topics below unless you need all of them. Select the specific topics you really want to transmit!</li>
+    <li>Open tab <b><i>'Traffic'</i></b> and copy the names of the topics you have subscribed.</li>
+    <li>Open Loxone Config, create a <b><i>'virtual HTTP Input'</i></b> as a <i>'folder'</i> for the subscribed topics. Enter '.' (single dot) as the URL to prevent complaints from Loxone Config about missing parameters.</li>
+    <li>Create <b><i>'virtual HTTP Input Command'</i></b> for each topic you have subscribed. Paste the name of the topic into the <b><i>'name'</i></b> field. <b>IMPORTANT:</b> The name has to match to the topic! Add '\.' in <b><i>'command recognition'</i></b> to avoid complaints about missing information in Loxone Config. HTTP polling is NOT used! MQTT transmits the values to your miniserver via API calls.</li>
+    <li>After you have added all topics to Loxone Config, deploy the new config to your miniserver.</li>
+</ol>
+<p><b>NOTE:</b> Only changed values are transmitted via MQTT! You either have to wait until values have changed or press the button 'Resend all' in tab 'Traffic' within the menu for the MQTT Gateway.</p>
+<?php
+    } else {
+?>
+<p>All data is transferred via MQTT. <span style="color:orange; font-weight:bold">MQTT gateway version 2 is NOT detected.</span> The subscription for this is
     <span class="mono"><?=MQTTTOPIC?>/#</span>
     and is automatically registered in the MQTT gateway plugin.</p>
-
 <?php
-	// Query MQTT Settings
-	$mqttcred = mqtt_connectiondetails();
+    }
 	if ( !isset($mqttcred) ) {
 ?>
 

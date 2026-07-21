@@ -55,12 +55,12 @@ if(!empty($_POST["useVIN"])) {
     }
 </style>
 
+<!-- Status -->
+<h1>Status</h1>
 <?php
 if((!$tokenvalid) && !$allowWithoutToken) {
 ?>
 
-<!-- Status -->
-<div class="wide">Status</div>
 <p style="color:red">
     <b>You are not logged in.</b> No locally mapped BLE vehicle with VIN was found.
 </p><br>
@@ -69,8 +69,6 @@ if((!$tokenvalid) && !$allowWithoutToken) {
 } else {
 ?>
 
-<!-- Status -->
-<div class="wide">Status</div>
 <?php
 if($tokenvalid) {
 ?>
@@ -90,7 +88,7 @@ if($tokenvalid) {
 <!-- Queries -->
 
 
-<div class="wide">Function Blocks in Loxone Config</div>
+<h1>Function Blocks in Loxone Config</h1>
 <p>
     This page lists all http commands that can be issued from the Loxone Miniserver. These commands are either forwarded by this plugin to Tesla via https over the Internet or send locally to your car via BLE. 
 </p>
@@ -99,7 +97,7 @@ if($tokenvalid) {
         <div style="flex: 10%; align-content: center;"><input type="checkbox" data-role="flipswitch" name="useVIN" id="useVIN" data-on-text="VIN" data-off-text="VID" data-wrapper-class="custom-label-flipswitch" <?php if ($useVIN) echo 'checked="checked"'; if (!$tokenvalid) echo 'disabled="disabled"'; ?>></div> 
         <div style="flex: 1%; align-content: center;"></div> 
         <div style="flex: 89%; align-content: center;"><label for="useVIN"><p>Either the vehicle's VID or VIN can be used for all commands (following Tesla's API's). Using the VIN avoids retrieving it via the Owner' API, because the VIN is required for all commands via BLE.</p>
-            <b>NOTE:</b> In previous versions of the plugin, only the VID was allowed.</label></div> 
+            <b>NOTE:</b> In previous versions of the plugin, only the VID was allowed. Now, it is recommended to use the VIN. IF no token is available (not logged in), the VIN MUST be used.</label></div> 
     </div> 
 </form>
 

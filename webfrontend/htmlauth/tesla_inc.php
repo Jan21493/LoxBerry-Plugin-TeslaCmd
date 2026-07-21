@@ -1040,6 +1040,8 @@ function object_count($object)
 
 function read_local_ble_vehicles()
 {
+	LOGINF("read_local_ble_vehicles: Read locally mapped BLE vehicles.");
+
 	if( !file_exists(LOCALBLEFILE) ) {
 		LOGDEB("read_local_ble_vehicles: No local BLE vehicle file found.");
 		return new stdClass();
@@ -1049,6 +1051,13 @@ function read_local_ble_vehicles()
 	if (!is_object($vehicles)) {
 		LOGWARN("read_local_ble_vehicles: File content is invalid. Returning empty list.");
 		return new stdClass();
+	}
+
+	foreach ($vehicles as $key => $vehicle) {
+		if (!isset($vehicle->discovered) && isset($vehicle->last_seen)) {
+			$vehicle->discovered = $vehicle->last_seen;
+		}
+		$vehicles->{$key} = $vehicle;
 	}
 
 	return $vehicles;
@@ -1092,7 +1101,7 @@ function create_local_ble_vehicle($mappedVehicle)
 	$vehicle->access_type = "BLE scan";
 	$vehicle->local_name = $mappedVehicle->local_name;
 	$vehicle->local_rssi = isset($mappedVehicle->rssi) ? $mappedVehicle->rssi : null;
-	$vehicle->last_seen = empty($mappedVehicle->last_seen) ? "" : $mappedVehicle->last_seen;
+	$vehicle->discovered = isset($mappedVehicle->discovered) ? $mappedVehicle->discovered : (isset($mappedVehicle->last_seen) ? $mappedVehicle->last_seen : "");
 	$vehicle->local_ble = true;
 	return $vehicle;
 }
@@ -1118,7 +1127,7 @@ function get_all_vehicles($ownerVehicles = null)
 			if (isset($vehicle->vin) && ($vehicle->vin == $localVehicle->vin)) {
 				$vehicle->local_name = $localVehicle->local_name;
 				$vehicle->local_rssi = isset($localVehicle->rssi) ? $localVehicle->rssi : null;
-				$vehicle->last_seen = empty($localVehicle->last_seen) ? "" : $localVehicle->last_seen;
+				$vehicle->discovered = isset($localVehicle->discovered) ? $localVehicle->discovered : (isset($localVehicle->last_seen) ? $localVehicle->last_seen : "");
 				$vehicle->local_ble = true;
 				$vehicles->{$key} = $vehicle;
 				$found = true;

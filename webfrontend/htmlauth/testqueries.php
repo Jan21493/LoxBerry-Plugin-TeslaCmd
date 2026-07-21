@@ -89,28 +89,28 @@ if ((!$tokenvalid) && ($type == "GENERAL")) {
     }
 </style>
 
+<!-- Status -->
+<h1>Status</h1>
+
 <?php
-// if($tokenvalid == "false")
+// No token and no locally mapped BLE vehicle with VIN found
 if((!$tokenvalid) && !$allowWithoutToken) {
 ?>
-
-<!-- Status -->
-<div class="wide">Status</div>
 <p style="color:red">
 	<b>You are not logged in.</b> No locally mapped BLE vehicle with VIN was found.
 </p>
 <br>
 
 <?php
-// if($tokenvalid == "false")
+// Else, either a valid token is available or at least one locally mapped BLE vehicle with VIN was found
 } else {
 ?>
 
 <!-- Queries -->
 <?php
+	// No token, but at least one locally mapped BLE vehicle with VIN was found
 	if(!$tokenvalid) {
 ?>
-<div class="wide">Status</div>
 <p style="color:orange">
 	<b>You are not logged in.</b> Only BLE-capable vehicle commands are available.
 </p>
@@ -145,7 +145,7 @@ if((!$tokenvalid) && !$allowWithoutToken) {
 	}
 ?>
 
-<div class="wide">Test Queries</div>
+<h1>Test Queries</h1>
 
 <form method="post" name="main_form" action="?test_query">
     <div class="form-group">
@@ -297,13 +297,43 @@ if((!$tokenvalid) && !$allowWithoutToken) {
                 <td>
 <?php
 			foreach ($command->PARAM as $param => $param_desc) {
+				$paramOptions = null;
+				if (isset($command->PARAM_OPTIONS) && isset($command->PARAM_OPTIONS->$param) && is_array($command->PARAM_OPTIONS->$param)) {
+					$paramOptions = $command->PARAM_OPTIONS->$param;
+				}
+				$paramDefault = "";
+				if (isset($command->PARAM_DEFAULTS) && isset($command->PARAM_DEFAULTS->$param)) {
+					$paramDefault = strval($command->PARAM_DEFAULTS->$param);
+				}
+				$paramValue = isset($_REQUEST["$param"]) ? strval($_REQUEST["$param"]) : $paramDefault;
 ?>
                     <tr>
                         <td>
                             <label id="labeldepth"><?=$param;?></label>
                         </td>
                         <td>
-                            <input type="text" name="<?=$param;?>" value="<?=$_REQUEST["$param"];?>">
+<?php
+				if (is_array($paramOptions) && count($paramOptions) > 0) {
+?>
+                            <select name="<?=$param;?>">
+<?php
+					foreach ($paramOptions as $optionValue) {
+						$optionValue = strval($optionValue);
+?>
+                                <option value="<?=htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8');?>" <?php if($paramValue === $optionValue){ echo " selected"; } ?>>
+                                    <?=htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8');?>
+                                </option>
+<?php
+					}
+?>
+                            </select>
+<?php
+				} else {
+?>
+                            <input type="text" name="<?=$param;?>" value="<?=htmlspecialchars($paramValue, ENT_QUOTES, 'UTF-8');?>">
+<?php
+				}
+?>
                         </td><td></td>
 						<td>
 							<p class="hint"><?=$param_desc;?></p>

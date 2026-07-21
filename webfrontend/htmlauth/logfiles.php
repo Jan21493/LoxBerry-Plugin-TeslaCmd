@@ -11,7 +11,7 @@ $L = LBSystem::readlanguage("language.ini");
 LBWeb::lbheader($template_title, $helplink, $helptemplate);
 ?>
 
-<div class="wide">Logfiles</div>
+<h1>Logfiles</h1>
 <?php echo LBWeb::loglist_html(); ?>
 
 <?php

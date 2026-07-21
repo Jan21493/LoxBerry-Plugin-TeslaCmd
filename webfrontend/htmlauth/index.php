@@ -1097,10 +1097,16 @@ function installKeysStep3( vin ) {
     global $cfg;
     $mqttcred = mqtt_connectiondetails();
     $mqttgatewayversion = isset($cfg->Mqtt->Gatewayversion) ? (int)$cfg->Mqtt->Gatewayversion : null;
+    $loxberryversion = isset($cfg->Base->Version) ? (string)$cfg->Base->Version : "";
+    $loxberrymajor = 0;
+    if (preg_match('/^(\d+)/', $loxberryversion, $matches)) {
+        $loxberrymajor = (int)$matches[1];
+    }
+    $showMqttGatewayV2NotDetectedHint = ($loxberrymajor >= 4);
     $mqttgatewayv2 = ($mqttgatewayversion === 2);
     if ($mqttgatewayv2) {
 ?>
-<p>All data is transferred via MQTT. <span style="color:green; font-weight:bold">MQTT gateway version 2 is detected.</span> There is no automatic subscription for all topics! You have to subscribe to the topics you like to transmit to your miniserver(s). See LoxWiki for details. Basic workflow:</p>
+<p>All data is transferred via MQTT. <span style="color:green; font-weight:bold">MQTT gateway version 2 is selected. Good!</span> There is no automatic subscription for all topics! You have to subscribe to the topics you like to transmit to your miniserver(s). See LoxWiki for details. Basic workflow:</p>
 <ol>
     <li>Open menu <b><i>'MQTT Gateway'</i></b>, tab <b><i>'Subscriptions'</i></b> and subscribe (check) the topics you like to transmit to your miniserver. You may need to expand folders. Do not subscribe to a whole folder, because it includes all topics below unless you need all of them. Select the specific topics you really want to transmit!</li>
     <li>Open tab <b><i>'Traffic'</i></b> and copy the names of the topics you have subscribed.</li>
@@ -1112,7 +1118,7 @@ function installKeysStep3( vin ) {
 <?php
     } else {
 ?>
-<p>All data is transferred via MQTT. <span style="color:orange; font-weight:bold">MQTT gateway version 2 is NOT detected.</span> The subscription for this is
+<p>All data is transferred via MQTT. <?php if ($showMqttGatewayV2NotDetectedHint) { ?><span style="color:orange; font-weight:bold">MQTT gateway version 2 is NOT selected, but recommended for efficiency.</span> <?php } ?>The subscription for this is
     <span class="mono"><?=MQTTTOPIC?>/#</span>
     and is automatically registered in the MQTT gateway plugin.</p>
 <?php

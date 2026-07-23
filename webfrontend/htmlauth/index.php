@@ -19,19 +19,23 @@ require_once "tesla_inc.php";
 
 $navbar[1]['active'] = True;
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 // Print LoxBerry header
 $L = LBSystem::readlanguage("language.ini");
 LBWeb::lbheader($template_title, $helplink, $helptemplate);
 
+$oauthStatus = !empty($_GET["oauth_status"]) ? trim($_GET["oauth_status"]) : "";
+$oauthMessage = !empty($_GET["oauth_message"]) ? trim($_GET["oauth_message"]) : "";
+$statusMessage = "";
+$statusColor = "green";
+$oauthCallbackUrl = tesla_get_oauth_callback_url();
+
 //Checktoken
 $tokenvalid = tesla_checktoken();
-$tokenexpires = 0;
-if (!empty($login->bearer_token)) {
-    $tokenparts = explode(".", $login->bearer_token);
-    if (isset($tokenparts[1])) {
-        $tokenexpires = json_decode(base64_decode($tokenparts[1]))->exp;
-    }
-}
+$tokenexpires = tesla_get_token_expiration($login);
 $ownerVehicles = new stdClass();
 if($tokenvalid) {
     $ownerVehicles = tesla_summary();
@@ -242,8 +246,24 @@ if (isset($_GET['delete_token'])) {
 	delete_token();
 	echo "<script> location.href='index.php'; </script>";
 } else if(isset($_POST["setlogintoken"])) {
-    setlogintoken($_POST["access_token"], $_POST["refresh_token"]);
-    echo "<script> location.href='index.php'; </script>";
+    $output = json_decode(setlogintoken($_POST["access_token"], $_POST["refresh_token"]));
+    if($output->success == 0) {
+        $statusMessage = $output->message;
+        $statusColor = "red";
+    } else {
+        echo "<script> location.href='index.php'; </script>";
+    }
+} else if(isset($_POST["startoauth"])) {
+    $oauthLogin = tesla_prepare_oauth_login($oauthCallbackUrl);
+    $_SESSION["teslacmd_oauth"] = array(
+        "state" => $oauthLogin["state"],
+        "code_verifier" => $oauthLogin["code_verifier"],
+        "redirect_uri" => $oauthLogin["redirect_uri"],
+        "created_at" => time()
+    );
+    session_write_close();
+    echo "<script> location.href=".json_encode($oauthLogin["auth_url"])."; </script>";
+    echo '<p>If your browser does not redirect automatically, <a href="'.htmlspecialchars($oauthLogin["auth_url"]).'">click here to continue to Tesla login</a>.</p>';
 } else if(isset($_POST["setAPI"])) {
     // Save API settings
     $apidata = new stdClass();
@@ -276,6 +296,25 @@ if (isset($_GET['delete_token'])) {
 	}
 }
 
+if (!empty($oauthStatus)) {
+    if ($oauthStatus === "success") {
+        $statusColor = "green";
+    } elseif ($oauthStatus === "warning") {
+        $statusColor = "orange";
+    } else {
+        $statusColor = "red";
+    }
+    $statusMessage = $oauthMessage;
+}
+
+if (!empty($statusMessage)) {
+?>
+<p style="color:<?=$statusColor?>">
+    <b><?=htmlspecialchars($statusMessage)?></b>
+</p><br>
+<?php
+}
+
 if(!$tokenvalid) {
 		// $challenge = gen_challenge();
 		// $code_verifier = $challenge["code_verifier"];
@@ -285,7 +324,21 @@ if(!$tokenvalid) {
 ?>
 <h1>Login to Tesla Owner Account via Token</h1>
 
-<p>Enter the Access Token & Refresh Token:<br><br>
+<h2>Get Tokens</h2>
+<p>
+    Use the guided Tesla OAuth login to retrieve and save access and refresh tokens automatically.<br>
+    After Tesla login, your browser must be able to reach this Raspberry Pi callback URL:<br>
+    <span class="mono"><?=htmlspecialchars($oauthCallbackUrl)?></span><br>
+    If that callback is not reachable from your PC or Mac browser, use the manual method below instead.
+</p>
+<form method="post">
+    <input type="hidden" name="startoauth" value="1">
+    <input type="submit" value="Get Tokens">
+</form>
+<br>
+
+<h2>Manual Entry</h2>
+<p>Enter the Access Token & Refresh Token manually if you prefer an external token generator or if the OAuth callback cannot be reached.<br><br>
 
 You can use one of the following apps or browser extention to generate an Access Token & Refresh Token from the Tesla server.
 <li><a href="https://chrome.google.com/webstore/detail/tesla-access-token-genera/kokkedfblmfbngojkeaepekpidghjgag" target="_blank">Access Token Generator for Tesla (Chrome Web Store)</a> / <a href="https://github.com/DoctorMcKay/chromium-tesla-token-generator" target="_blank">GitHub</a></li>

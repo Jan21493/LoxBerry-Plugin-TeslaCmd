@@ -60,11 +60,19 @@ function tesla_refreshtoken()
 	}
 	
 	LOGDEB("tesla_refreshtoken: read loginfile.");
-	$logindata = file_get_contents(LOGINFILE);
-	$login = json_decode($logindata);
+	$logindata = tesla_read_login_data();
+	if ($logindata === false) {
+		mqttpublish(0, "/token_valid");
+		LOGDEB("tesla_refreshtoken: File data error, no token found. Fallback to re-login.");
+		LOGINF("No valid token, please login.");
+		return;
+	}
+	$login = (object)$logindata;
 	
 	// Read token
-	if( empty($login->bearer_token) ) {
+	$accessToken = tesla_get_login_access_token($logindata);
+	$refreshToken = tesla_get_login_refresh_token($logindata);
+	if( empty($accessToken) ) {
 		mqttpublish(0, "/token_valid");
 		LOGDEB("tesla_refreshtoken: File data error, no token found. Fallback to re-login.");
 		LOGINF("No valid token, please login.");
@@ -72,8 +80,7 @@ function tesla_refreshtoken()
 	}
 	
 	// Get date part of token
-	$tokenparts = explode(".", $login->bearer_token);
-	$tokenexpires = json_decode( base64_decode($tokenparts[1]) )->exp;
+	$tokenexpires = tesla_get_token_expiration($logindata);
 
     $timediff = 60*240; //60sec*240min (4h) 
 
@@ -81,18 +88,25 @@ function tesla_refreshtoken()
 	LOGDEB("tesla_refreshtoken: Refresh Token valid until - ". ($tokenexpires) ." ".date("Y-m-d H:i:s", $tokenexpires));
     LOGDEB("tesla_refreshtoken: Time to Refresh Token     - ". ($tokenexpires-$timediff) ." ".date("Y-m-d H:i:s", $tokenexpires-$timediff));
 	
-	if( $tokenexpires-$timediff > time() ) {
+	if( $tokenexpires > 0 && $tokenexpires-$timediff > time() ) {
 		// Token is valid
 		mqttpublish(1, "/token_valid");
 		mqttpublish(epoch2lox($tokenexpires), "/token_expires");
 		LOGOK("Token valid (" . date("Y-m-d\TH:i:s", $tokenexpires) . ").");
-		$token = $login->bearer_token;
-	} elseif ($tokenexpires > time()) {
+		$token = $accessToken;
+	} elseif (!empty($refreshToken)) {
 		// Token expired
-		LOGINF("Token will expire (" . date("Y-m-d\TH:i:s", $tokenexpires) . "), refresh token.");
+		if ($tokenexpires > 0) {
+			LOGINF("Token will expire (" . date("Y-m-d\TH:i:s", $tokenexpires) . "), refresh token.");
+		} else {
+			LOGINF("Token expiration is unknown, refresh token.");
+		}
 
-		$token = tesla_oauth2_refresh_token( $login->bearer_refresh_token );
+		$token = tesla_oauth2_refresh_token($refreshToken);
 		if(!empty($token)) {
+			$logindata = tesla_read_login_data();
+			$tokenexpires = tesla_get_token_expiration($logindata);
+			$login = is_array($logindata) ? (object)$logindata : $login;
 			mqttpublish(1, "/token_valid");
 			mqttpublish(epoch2lox($tokenexpires), "/token_expires");
 		} else {
@@ -804,8 +818,10 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 function delete_token()
 {
 	// delete file with token
-	unlink(LOGINFILE);
-	LOGDEB("delete_token: File " . LOGINFILE . "deleted.");
+	if (file_exists(LOGINFILE)) {
+		unlink(LOGINFILE);
+		LOGDEB("delete_token: File " . LOGINFILE . "deleted.");
+	}
 	LOGINF("Token deleted.");
 }
 
@@ -813,18 +829,19 @@ function delete_token()
 function setlogintoken($bearer_token, $refresh_token)
 {
 	// Add Tokens to file
-	if(empty($bearer_token)) { return return_msg(0, "Bearer Token issue"); }
+	if(empty($bearer_token) || empty($refresh_token)) { return return_msg(0, "Please enter both an access token and a refresh token."); }
 
-	$tokens = json_decode($response["response"], true);
-    $tokens["bearer_token"] = $bearer_token;
-    $tokens["bearer_refresh_token"] = $refresh_token;
-    $return_message = json_encode($tokens);
-
-    // Write data to disk
-    file_put_contents(LOGINFILE, $return_message);    
+	$tokens = array(
+		"access_token" => trim($bearer_token),
+		"refresh_token" => trim($refresh_token)
+	);
+	$result = tesla_store_tokens($tokens, "manual");
+	if (!$result["success"]) {
+		return return_msg(0, $result["message"]);
+	}
 
     // Output
-    return return_msg(1, $return_message);  
+    return return_msg(1, "Token data saved.");  
 }
 
 
@@ -869,19 +886,23 @@ function gen_challenge()
 {
     global $tesla_api_code_vlc;
 
-    $code_verifier = substr(hash('sha512', mt_rand()), 0, $tesla_api_code_vlc);
-    $code_challenge = rtrim(strtr(base64_encode($code_verifier), '+/', '-_'), '='); 
+    $code_verifier = tesla_base64url_encode(random_bytes($tesla_api_code_vlc));
+    $code_verifier = substr($code_verifier, 0, $tesla_api_code_vlc);
+    $code_challenge = tesla_base64url_encode(hash('sha256', $code_verifier, true)); 
     
-    $state = rtrim(strtr(base64_encode(substr(hash('sha256', mt_rand()), 0, 12)), '+/', '-_'), '='); 
+    $state = tesla_base64url_encode(random_bytes(24)); 
 
     return array("code_verifier" => $code_verifier, "code_challenge" => $code_challenge, "state" => $state);
 }
 
 
-function gen_url($code_challenge, $state)
+function gen_url($code_challenge, $state, $redirect_uri = "")
 {
     global $tesla_api_oauth2, $tesla_api_redirect;
 
+    if (empty($redirect_uri)) {
+    	$redirect_uri = $tesla_api_redirect;
+    }
 
     $datas = array(
           'audience' => '',
@@ -890,7 +911,7 @@ function gen_url($code_challenge, $state)
           'code_challenge_method' => 'S256',
           'locale' => 'en-US',
           'prompt' => 'login',
-          'redirect_uri' => $tesla_api_redirect,
+          'redirect_uri' => $redirect_uri,
           'response_type' => 'code',
           'scope' => 'openid email offline_access',
           'state' => $state
@@ -906,42 +927,283 @@ function return_msg($code, $msg)
 }
 
 
+function tesla_base64url_encode($value)
+{
+    return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+}
+
+
+function tesla_base64url_decode($value)
+{
+	$remainder = strlen($value) % 4;
+	if ($remainder > 0) {
+		$value .= str_repeat("=", 4 - $remainder);
+	}
+	return base64_decode(strtr($value, '-_', '+/'));
+}
+
+
+function tesla_get_plugin_url($script_name = "")
+{
+	$scheme = "http";
+	if (!empty($_SERVER["HTTP_X_FORWARDED_PROTO"])) {
+		$scheme = trim(explode(",", $_SERVER["HTTP_X_FORWARDED_PROTO"])[0]);
+	} elseif ((!empty($_SERVER["HTTPS"]) && strtolower($_SERVER["HTTPS"]) !== "off") || (!empty($_SERVER["SERVER_PORT"]) && (int)$_SERVER["SERVER_PORT"] === 443)) {
+		$scheme = "https";
+	}
+
+	$host = !empty($_SERVER["HTTP_HOST"]) ? $_SERVER["HTTP_HOST"] : LBSystem::get_localip();
+	$scriptDir = "/admin/plugins/".LBPPLUGINDIR;
+	if (!empty($_SERVER["SCRIPT_NAME"])) {
+		$scriptDir = rtrim(str_replace("\\", "/", dirname($_SERVER["SCRIPT_NAME"])), "/");
+	}
+	if ($scriptDir === "/") {
+		$scriptDir = "";
+	}
+
+	$path = $scriptDir;
+	if (!empty($script_name)) {
+		$path .= "/".$script_name;
+	}
+	return $scheme."://".$host.$path;
+}
+
+
+function tesla_get_oauth_callback_url()
+{
+	return tesla_get_plugin_url("oauth_callback.php");
+}
+
+
+function tesla_prepare_oauth_login($redirect_uri = "")
+{
+	if (empty($redirect_uri)) {
+		$redirect_uri = tesla_get_oauth_callback_url();
+	}
+
+	$challenge = gen_challenge();
+	$challenge["redirect_uri"] = $redirect_uri;
+	$challenge["auth_url"] = gen_url($challenge["code_challenge"], $challenge["state"], $redirect_uri);
+	return $challenge;
+}
+
+
+function tesla_parse_token_expiration($access_token)
+{
+	if (empty($access_token)) {
+		return 0;
+	}
+
+	$tokenparts = explode(".", $access_token);
+	if (!isset($tokenparts[1])) {
+		return 0;
+	}
+
+	$payload = json_decode(tesla_base64url_decode($tokenparts[1]), true);
+	if (empty($payload["exp"])) {
+		return 0;
+	}
+
+	return (int)$payload["exp"];
+}
+
+
+function tesla_get_token_expiration($tokens)
+{
+	if (is_object($tokens)) {
+		$tokens = (array)$tokens;
+	}
+	if (!is_array($tokens)) {
+		return 0;
+	}
+	if (!empty($tokens["expires_at"])) {
+		return (int)$tokens["expires_at"];
+	}
+	if (!empty($tokens["created_at"]) && !empty($tokens["expires_in"])) {
+		return (int)$tokens["created_at"] + (int)$tokens["expires_in"];
+	}
+	return tesla_parse_token_expiration(tesla_get_login_access_token($tokens));
+}
+
+
+function tesla_get_login_access_token($login)
+{
+	if (is_object($login)) {
+		$login = (array)$login;
+	}
+	if (!is_array($login)) {
+		return "";
+	}
+	if (!empty($login["bearer_token"])) {
+		return $login["bearer_token"];
+	}
+	if (!empty($login["access_token"])) {
+		return $login["access_token"];
+	}
+	return "";
+}
+
+
+function tesla_get_login_refresh_token($login)
+{
+	if (is_object($login)) {
+		$login = (array)$login;
+	}
+	if (!is_array($login)) {
+		return "";
+	}
+	if (!empty($login["bearer_refresh_token"])) {
+		return $login["bearer_refresh_token"];
+	}
+	if (!empty($login["refresh_token"])) {
+		return $login["refresh_token"];
+	}
+	return "";
+}
+
+
+function tesla_read_login_data()
+{
+	if (!file_exists(LOGINFILE)) {
+		return false;
+	}
+
+	$logindata = json_decode(file_get_contents(LOGINFILE), true);
+	if (!is_array($logindata)) {
+		return false;
+	}
+
+	return $logindata;
+}
+
+
+function tesla_write_json_file($filename, $content)
+{
+	$result = file_put_contents($filename, $content, LOCK_EX);
+	if ($result === false) {
+		return false;
+	}
+
+	@chmod($filename, 0640);
+	return true;
+}
+
+
+function tesla_store_tokens($tokens, $token_source = "oauth", $fallback_refresh_token = "")
+{
+	if (is_object($tokens)) {
+		$tokens = (array)$tokens;
+	}
+	if (!is_array($tokens)) {
+		return array("success" => 0, "message" => "Tesla did not return token data.");
+	}
+
+	$access_token = "";
+	if (!empty($tokens["access_token"])) {
+		$access_token = trim($tokens["access_token"]);
+	} elseif (!empty($tokens["bearer_token"])) {
+		$access_token = trim($tokens["bearer_token"]);
+	}
+
+	$refresh_token = "";
+	if (!empty($tokens["refresh_token"])) {
+		$refresh_token = trim($tokens["refresh_token"]);
+	} elseif (!empty($tokens["bearer_refresh_token"])) {
+		$refresh_token = trim($tokens["bearer_refresh_token"]);
+	} elseif (!empty($fallback_refresh_token)) {
+		$refresh_token = trim($fallback_refresh_token);
+	}
+
+	if (empty($access_token) || empty($refresh_token)) {
+		return array("success" => 0, "message" => "Tesla did not return both an access token and a refresh token.");
+	}
+
+	$tokens["access_token"] = $access_token;
+	$tokens["refresh_token"] = $refresh_token;
+	$tokens["bearer_token"] = $access_token;
+	$tokens["bearer_refresh_token"] = $refresh_token;
+	$tokens["created_at"] = time();
+	$expires_at = tesla_get_token_expiration($tokens);
+	if ($expires_at > 0) {
+		$tokens["expires_at"] = $expires_at;
+	}
+	$tokens["token_source"] = $token_source;
+	$tokens["updated_at"] = time();
+
+	$return_message = json_encode($tokens);
+	if ($return_message === false) {
+		return array("success" => 0, "message" => "Token data could not be encoded.");
+	}
+
+	if (!tesla_write_json_file(LOGINFILE, $return_message)) {
+		return array("success" => 0, "message" => "Token data could not be written to disk.");
+	}
+
+	return array("success" => 1, "message" => "Token data saved.", "data" => $tokens);
+}
+
+
+function tesla_get_oauth_error_message($response_body, $default_message)
+{
+	$response = json_decode($response_body, true);
+	if (!is_array($response)) {
+		return $default_message;
+	}
+	if (!empty($response["error_description"])) {
+		return $response["error_description"];
+	}
+	if (!empty($response["error"])) {
+		return str_replace("_", " ", $response["error"]);
+	}
+	return $default_message;
+}
+
+
+function tesla_exchange_authorization_code($code, $code_verifier, $redirect_uri)
+{
+	global $user_agent, $tesla_api_oauth2;
+
+	if (empty($code) || empty($code_verifier) || empty($redirect_uri)) {
+		return array("success" => 0, "message" => "Tesla login could not be completed because required OAuth data is missing.");
+	}
+
+	$http_header = array('Content-Type: application/json', 'Accept: application/json', 'User-Agent: '.$user_agent);
+	$post = json_encode(array("grant_type" => "authorization_code", "client_id" => "ownerapi", "code" => $code, "code_verifier" => $code_verifier, "redirect_uri" => $redirect_uri));
+	$response = tesla_connect($tesla_api_oauth2."/token", 1, "", $http_header, $post, 0);
+	$token_res = json_decode($response["response"], true);
+
+	if (empty($token_res["access_token"]) || empty($token_res["refresh_token"])) {
+		return array("success" => 0, "message" => tesla_get_oauth_error_message($response["response"], "Tesla login did not return valid token data."));
+	}
+
+	$store_result = tesla_store_tokens($token_res, "oauth");
+	if (!$store_result["success"]) {
+		return $store_result;
+	}
+
+	return array("success" => 1, "message" => "Tesla login successful.", "data" => $store_result["data"]);
+}
+
+
 function login($weburl, $code_verifier, $code_challenge, $state)
 {
-    global $tesla_api_redirect, $user_agent, $tesla_api_oauth2, $cid, $cs, $tesla_api_owners;
+    global $tesla_api_redirect;
 
-    
-	$urlparm = explode('https://auth.tesla.com/void/callback?', $weburl);
-	LOGDEB("login: code: ".json_encode($urlparm));
-	parse_str($urlparm[1], $parm);
-    $code = $parm['code'];
-	LOGDEB("login: code: $code");
+	$parts = parse_url($weburl);
+	if (empty($parts["query"])) { return return_msg(0, "The Tesla callback URL does not contain an authorization code."); }
+	parse_str($parts["query"], $parm);
+    $code = !empty($parm['code']) ? $parm['code'] : "";
 
 
     if(empty($code)) { return return_msg(0, "Something is wrong ... Code not exists"); }
 
-    // Get the Bearer token
-    $http_header = array('Content-Type: application/json', 'Accept: application/json', 'User-Agent: '.$user_agent);
-    $post = json_encode(array("grant_type" => "authorization_code", "client_id" => "ownerapi", "code" => $code, "code_verifier" => $code_verifier, "redirect_uri" => $tesla_api_redirect));
-    $response = tesla_connect($tesla_api_oauth2."/token", 1, "", $http_header, $post, 0);
-
-    $token_res = json_decode($response["response"], true);
-	
-    $bearer_token = $token_res["access_token"];
-    $refresh_token = $token_res["refresh_token"];
-
-    if(empty($bearer_token)) { return return_msg(0, "Bearer Token issue"); }
-
-	$tokens = json_decode($response["response"], true);
-    $tokens["bearer_token"] = $bearer_token;
-    $tokens["bearer_refresh_token"] = $refresh_token;
-    $return_message = json_encode($tokens);
-
-    // Write data to disk
-    file_put_contents(LOGINFILE, $return_message);    
+	$result = tesla_exchange_authorization_code($code, $code_verifier, $tesla_api_redirect);
+	if (!$result["success"]) {
+		return return_msg(0, $result["message"]);
+	}
 
     // Output
-    return return_msg(1, $return_message);  
+    return return_msg(1, "Tesla login successful.");  
 }
 
 
@@ -951,32 +1213,26 @@ function tesla_oauth2_refresh_token($bearer_refresh_token)
 
     $brt = $bearer_refresh_token;
 
-    // Get the Bearer token
+    // Get the ******
     $http_header = array('Content-Type: application/json', 'Accept: application/json');
     $post = json_encode(array("grant_type" => "refresh_token", "client_id" => "ownerapi", "refresh_token" => $brt, "scope" => "openid email offline_access"));
     $response = tesla_connect($tesla_api_oauth2."/token", 1, "https://auth.tesla.com/", $http_header, $post, 0);
 
     $token_res = json_decode($response["response"], true);
 
-    $bearer_token = $token_res["access_token"];
-    $refresh_token = $token_res["refresh_token"];
+    if(empty($token_res["access_token"])) {
+    	LOGINF("tesla_oauth2_refresh_token: Refresh request failed.");
+    	return false;
+    }
 
-
-    if(empty($bearer_token)) { return return_msg(0, "Bearer Refresh Token is not valid"); }
-
-    $tokens = json_decode($response["response"], true);
-
-    if(empty($tokens['access_token'])) { return return_msg(0, "Token issue"); }
-
-    $tokens["bearer_token"] = $bearer_token;
-    $tokens["bearer_refresh_token"] = $refresh_token;
-    $return_message = json_encode($tokens);
-
-    // Write data to disk
-    file_put_contents(LOGINFILE, $return_message);
+    $store_result = tesla_store_tokens($token_res, "oauth", $brt);
+    if (!$store_result["success"]) {
+    	LOGINF("tesla_oauth2_refresh_token: Refreshed token could not be saved.");
+    	return false;
+    }
 
     // Output
-    return $bearer_token;
+    return $store_result["data"]["bearer_token"];
 }
 
 function read_api_data()

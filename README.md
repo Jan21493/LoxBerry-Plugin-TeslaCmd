@@ -23,6 +23,17 @@ Currently this plugin is in development, so it should be used in any productive 
 
 See 'Queries' and 'Test Queries' tabs for description and parmeters for each command. See https://wiki.loxberry.de/plugins/teslacmd/start for informations regarding installation and integration into Loxone home automation.
 
+## Tesla token setup
+
+The settings page supports two ways to populate `~/config/plugins/teslacmd/sessiondata.json`:
+
+1. **Get Tokens** (recommended): starts the Tesla OAuth login at `auth.tesla.com`, receives the callback in the plugin, and stores the access token, refresh token, and expiry metadata automatically.
+2. **Manual Entry** (fallback): keeps the existing fields so tokens from an external generator can still be pasted into the plugin.
+
+### OAuth callback requirement
+
+The guided OAuth flow redirects the browser back to the plugin on the LoxBerry / Raspberry Pi. The browser on the PC or Mac therefore must be able to reach the callback URL shown in the settings page. If that callback is not reachable because of DNS, hostname, firewall, or network routing, use the manual token entry instead.
+
 ## Example queries
 ### Returns all products including vehicles, powerwalls, and energy sites
 `http://<user>:<pass>@192.168.1.1/admin/plugins/teslacmd/send.php?action=product_list`

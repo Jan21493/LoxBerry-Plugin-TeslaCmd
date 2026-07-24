@@ -32,6 +32,8 @@ $oauthMessage = !empty($_GET["oauth_message"]) ? trim($_GET["oauth_message"]) : 
 $statusMessage = "";
 $statusColor = "green";
 $oauthCallbackUrl = tesla_get_oauth_callback_url();
+$pendingOauthUrl = !empty($_SESSION["teslacmd_oauth"]["auth_url"]) ? $_SESSION["teslacmd_oauth"]["auth_url"] : "";
+$pendingOauthSession = !empty($_SESSION["teslacmd_oauth"]) && is_array($_SESSION["teslacmd_oauth"]);
 
 //Checktoken
 $tokenvalid = tesla_checktoken();
@@ -254,16 +256,56 @@ if (isset($_GET['delete_token'])) {
         echo "<script> location.href='index.php'; </script>";
     }
 } else if(isset($_POST["startoauth"])) {
-    $oauthLogin = tesla_prepare_oauth_login($oauthCallbackUrl);
+    $oauthLogin = tesla_prepare_oauth_login($tesla_api_redirect);
+    $pendingOauthUrl = $oauthLogin["auth_url"];
+    $pendingOauthSession = true;
     $_SESSION["teslacmd_oauth"] = array(
         "state" => $oauthLogin["state"],
         "code_verifier" => $oauthLogin["code_verifier"],
         "redirect_uri" => $oauthLogin["redirect_uri"],
+        "auth_url" => $oauthLogin["auth_url"],
         "created_at" => time()
     );
     session_write_close();
-    echo "<script> location.href=".json_encode($oauthLogin["auth_url"])."; </script>";
-    echo '<p>If your browser does not redirect automatically, <a href="'.htmlspecialchars($oauthLogin["auth_url"]).'">click here to continue to Tesla login</a>.</p>';
+} else if(isset($_POST["setoauthurl"])) {
+    $oauthSession = !empty($_SESSION["teslacmd_oauth"]) && is_array($_SESSION["teslacmd_oauth"]) ? $_SESSION["teslacmd_oauth"] : array();
+    unset($_SESSION["teslacmd_oauth"]);
+    session_write_close();
+    $pendingOauthSession = false;
+    $pendingOauthUrl = "";
+    $weburl = !empty($_POST["weburl"]) ? trim($_POST["weburl"]) : "";
+    if (empty($oauthSession)) {
+        $statusMessage = "Tesla login session expired. Please start the OAuth login again.";
+        $statusColor = "red";
+    } elseif (!empty($oauthSession["created_at"]) && ((int)$oauthSession["created_at"] + 900) < time()) {
+        $statusMessage = "Tesla login timed out. Please start the OAuth login again.";
+        $statusColor = "red";
+    } else {
+        $parts = !empty($weburl) ? parse_url($weburl) : array();
+        parse_str(!empty($parts["query"]) ? $parts["query"] : "", $params);
+        $code = !empty($params["code"]) ? trim($params["code"]) : "";
+        $state = !empty($params["state"]) ? trim($params["state"]) : "";
+        if (empty($code)) {
+            $statusMessage = "The URL you pasted does not contain an authorization code. Please copy the full URL from your browser address bar after Tesla login.";
+            $statusColor = "red";
+        } elseif (empty($state) || empty($oauthSession["state"]) || !hash_equals($oauthSession["state"], $state)) {
+            $statusMessage = "Tesla login could not be verified (state mismatch). Please start the OAuth login again.";
+            $statusColor = "red";
+        } else {
+            $result = tesla_exchange_authorization_code($code, $oauthSession["code_verifier"], $oauthSession["redirect_uri"]);
+            if (!$result["success"]) {
+                $statusMessage = $result["message"];
+                $statusColor = "red";
+            } else {
+                echo "<script> location.href='index.php?oauth_status=success&oauth_message=".urlencode("Tesla tokens were saved successfully.")."'; </script>";
+            }
+        }
+    }
+} else if(isset($_POST["canceloauth"])) {
+    unset($_SESSION["teslacmd_oauth"]);
+    session_write_close();
+    $pendingOauthSession = false;
+    $pendingOauthUrl = "";
 } else if(isset($_POST["setAPI"])) {
     // Save API settings
     $apidata = new stdClass();
@@ -316,25 +358,40 @@ if (!empty($statusMessage)) {
 }
 
 if(!$tokenvalid) {
-		// $challenge = gen_challenge();
-		// $code_verifier = $challenge["code_verifier"];
-		// $code_challenge = $challenge["code_challenge"];
-		// $state = $challenge["state"];
-		// $timestamp = time();
 ?>
 <h1>Login to Tesla Owner Account via Token</h1>
 
 <h2>Get Tokens</h2>
+<?php if ($pendingOauthSession): ?>
+<p>
+    <strong>Step 2:</strong> Open the Tesla login page by clicking the link below (opens in a new tab).
+    After logging in, Tesla will redirect to a page that says &ldquo;Page not found&rdquo; &mdash; that is expected.
+    Copy the full URL from your browser&rsquo;s address bar
+    (it starts with <em>https://auth.tesla.com/void/callback?code=</em>)
+    and paste it into the field below, then click <strong>Submit</strong>.
+</p>
+<p><a href="<?=htmlspecialchars($pendingOauthUrl)?>" target="_blank" rel="noopener noreferrer">Open Tesla Login (new tab)</a></p>
+<form method="post">
+    <input type="hidden" name="setoauthurl" value="1">
+    <label for="weburl">Paste the Tesla callback URL here:</label>
+    <input type="text" id="weburl" name="weburl" required="required" placeholder="https://auth.tesla.com/void/callback?code=...">
+    <input type="submit" value="Submit">
+</form>
+<br>
+<form method="post">
+    <input type="hidden" name="canceloauth" value="1">
+    <input type="submit" value="Cancel / Start Over">
+</form>
+<?php else: ?>
 <p>
     Use the guided Tesla OAuth login to retrieve and save access and refresh tokens automatically.<br>
-    After Tesla login, your browser must be able to reach this Raspberry Pi callback URL:<br>
-    <span class="mono"><?=htmlspecialchars($oauthCallbackUrl)?></span><br>
-    If that callback is not reachable from your PC or Mac browser, use the manual method below instead.
+    Click &ldquo;Get Tokens&rdquo;, then follow the on-screen instructions to complete the Tesla login.
 </p>
 <form method="post">
     <input type="hidden" name="startoauth" value="1">
     <input type="submit" value="Get Tokens">
 </form>
+<?php endif; ?>
 <br>
 
 <h2>Manual Entry</h2>

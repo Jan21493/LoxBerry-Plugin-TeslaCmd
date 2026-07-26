@@ -31,7 +31,6 @@ $oauthStatus = !empty($_GET["oauth_status"]) ? trim($_GET["oauth_status"]) : "";
 $oauthMessage = !empty($_GET["oauth_message"]) ? trim($_GET["oauth_message"]) : "";
 $statusMessage = "";
 $statusColor = "green";
-$oauthCallbackUrl = tesla_get_oauth_callback_url();
 
 //Checktoken
 $tokenvalid = tesla_checktoken();
@@ -331,7 +330,15 @@ if(!$tokenvalid) {
 <br>
 
 <h2>Manual Entry</h2>
-<p>Enter the Access Token &amp; Refresh Token manually if you obtained them via the browser extension above or another external token generator.</p>
+<p>Enter the Access Token &amp; Refresh Token manually if you prefer an external token generator or if the OAuth callback cannot be reached.<br><br>
+
+You can use one of the following apps or browser extension to generate an Access Token &amp; Refresh Token from the Tesla server.
+<li><a href="https://chrome.google.com/webstore/detail/tesla-access-token-genera/kokkedfblmfbngojkeaepekpidghjgag" target="_blank">Access Token Generator for Tesla (Chrome Web Store)</a> / <a href="https://github.com/DoctorMcKay/chromium-tesla-token-generator" target="_blank">GitHub</a></li>
+<li><a href="https://microsoftedge.microsoft.com/addons/detail/tesla-access-token-genera/mjpplpkadjdmedpklcioagjgaflfphbo" target="_blank">Access Token Generator for Tesla (Microsoft Edge-Add-ons)</a> / <a href="https://github.com/DoctorMcKay/chromium-tesla-token-generator" target="_blank">GitHub</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=net.leveugle.teslatokens" target="_blank">Tesla Tokens (Android)</a></li>
+<li><a href="https://apps.apple.com/us/app/auth-app-for-tesla/id1552058613#?platform=iphone" target="_blank">Auth app for Tesla (iOS)</a></li>
+<br><strong>Note:</strong> The Chrome/Edge extension versions up to and including version 2.0.3 do not work and need to be updated before use.
+</p>
 
 <form method="post">
     <input type="hidden" name="setlogintoken" value="">

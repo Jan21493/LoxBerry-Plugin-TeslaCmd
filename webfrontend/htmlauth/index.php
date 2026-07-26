@@ -309,9 +309,9 @@ if(!$tokenvalid) {
 
 <h2>Get Tokens via Browser Extension</h2>
 <p>
-    Tesla no longer accepts the <code>void/callback</code> redirect URI as of mid-2026. The only working method
-    to obtain tokens automatically is via a browser extension that intercepts the <code>tesla://auth/callback</code>
-    redirect.<br><br>
+    Tesla has increased the requirements in their oauth API in mid-2026. As a result, the existing Chrome extension does not work anymore.
+	You may install the following Crome extension in developer mode, wait until the extension has been fixed (PR was sent to maintainer),
+	or use one of the apps listed below.<br><br>
     <strong>Recommended extension (Chrome / Edge):</strong><br>
     <a href="https://github.com/Jan21493/chromium-tesla-token-generator" target="_blank" rel="noopener noreferrer">
         Jan21493/chromium-tesla-token-generator on GitHub

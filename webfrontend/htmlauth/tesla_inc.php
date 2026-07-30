@@ -48,7 +48,7 @@ function tesla_refreshtoken()
 	// Function to read token from file and refresh token, if expired
 	// Reads login data from disk, and checks for expiration of the token
 	//[x] Add token_expires to mqtt
-	LOGINF("Check token.");
+	LOGINF("tesla_refreshtoken: Checking token ...");
 	
 	global $token;
 	
@@ -768,33 +768,35 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 		// On an Orange PI zero 3 with DietPi v9.7.1 (Bookworm, released July 2024) the command returned errors after typically 1-2 hours
 		// so this 'dirty' fix was added that restarts the bluetooth service. There might be an error in the bluetooth driver that I can't fix.
 		exec("cat /sys/firmware/devicetree/base/model", $output2, $result_code2);
-		$model = $output2[0];
+		$model = isset($output2[0]) ? $output2[0] : '';
+		$model = str_replace("\0", '', $model); // remove null bytes
+		$model = trim($model);                  // removes \r, \n, spaces
+
 		LOGINF("tesla_shell_exec: '$model' detected!");
-		if (($result_code2 == 0) && ($model=="OrangePi Zero3")) {
+		if (($result_code2 == 0) && ($model === "OrangePi Zero3")) {
 			// restart bluetooth service on Orange PI Zero 3 - does not really work great
 			// and retry the command (one time - fixed)
-			LOGINF("tesla_shell_exec: restarting aw859a-bluetooth.service and waiting for 5 seconds!");
-			exec("sudo systemctl restart aw859a-bluetooth.service", $output2, $result_code2);
+			LOGINF("tesla_shell_exec: restarting bluetooth, aw859a-bluetooth service and waiting for 5 seconds!");
+			exec("sudo systemctl stop bluetooth.target bluetooth.service aw859a-bluetooth.service", $output2, $result_code2);
+			exec("sudo modprobe -r sprdbt_tty", $output2, $result_code2);
+			exec("sudo modprobe -r sprdwl_ng", $output2, $result_code2);
+			exec("sudo systemctl start aw859a-bluetooth.service bluetooth.service bluetooth.target", $output2, $result_code2);
 			sleep(5);
 		}
 		// retry command depending on 'retries' setting
 		if ($retries == "0") {
 			LOGDEB("tesla_shell_exec: Last command will not be repeated, because 'retries' setting is set to 0 times!");
 		} else {
-			LOGDEB("tesla_shell_exec: Last command will be repeated after waiting for 5 seconds ...");				
-			sleep(5);
+			LOGDEB("tesla_shell_exec: Last command will be repeated after waiting for 8 seconds ...");				
+			sleep(8);
 			exec($command, $output, $result_code);
 			if (($retries == "2") && ($result_code != 0)) {
-				LOGDEB("tesla_shell_exec: Last command failed again and is repeated again after waiting 5 seconds ...");				
-				sleep(5);
+				LOGDEB("tesla_shell_exec: Last command failed again and is repeated again after waiting 8 seconds ...");				
+				sleep(8);
 				exec($command, $output, $result_code);
 			}
 		} 
 		// additional detections and restart of service may be added for specific platforms if required
-	}
-	//Did an error occur? If so, dump it out.
-	if(is_null($result_code != 0)){
-		LOGINF("tesla_shell_exec: command has returned an error. Final result code:" . $result_code);
 	}
 	// remove file lock
 	if ($exclusive && $lockHandle !== NULL) {

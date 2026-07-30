@@ -10,10 +10,16 @@ $log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
 LOGSTART("Start Logging - send.php");
 
 LOGOK("send.php: -------------------- start of send.php -------------------- ");
-LOGINF("send.php: Source IP-address: ".$_SERVER['REMOTE_ADDR']);
+if (isset($_SERVER['QUERY_STRING'])) {
+	LOGINF("send.php?".$_SERVER['QUERY_STRING']." from ".$_SERVER['REMOTE_ADDR']);
+}
+
+global $token;
 
 require_once "defines.php";
 require_once "tesla_inc.php";
+
+LOGINF("send.php: ".(!empty($token) ? "token is available" : "token is not available").".");
 
 //
 // Query parameter 
@@ -60,7 +66,7 @@ $apidata = read_api_data();
 $api = 0;
 // VIN was provided. There is no need to look up for vehicles that belong to a specific ID
 if (!empty($vin)) {
-	$api = getApiProtocol($vin);
+	$api = getApiProtocol($vin, !empty($token));
 	LOGDEB("send.php: VIN: $vin was provided, ".(empty($vid) ? ", no ID" : ", ID: $vid").", ".$apinames[$api]." is used.");
 } elseif (!empty($vid)) {
 	// Vehicle ID was provided. A lookup is done to get all vehicles / energy sites that are associated with the ID
@@ -70,7 +76,7 @@ if (!empty($vin)) {
 		// vehicle was found
 		if (($vid == $vehicle->id_s) || ($vid == $vehicle->id)) {
 			$vin = $vehicle->vin;
-			$api = getApiProtocol($vin);
+			$api = getApiProtocol($vin, !empty($token));
 		}
 	} 
 	LOGDEB("send.php: ID: $vid was provided, lookup for VIN got: $vin, ".$apinames[$api]." is used.");
@@ -97,8 +103,8 @@ if(isset($command)) {
 
 	// error if command is not supported with selected api
 	if (!in_array($api, $command->API)) {
-		$command_output = "Command is not supported in ".$apinames[int($api)].". Verify API settings.\n";
-		LOGERR("send.php: Command not supported in ".$apinames[int($api)]);
+		$command_output = "Command is not supported in ".$apinames[$api].". Verify API settings.\n";
+		LOGERR("send.php: Command not supported in ".$apinames[$api]);
 		$command_error = true;
 	}
 
@@ -142,19 +148,24 @@ if(isset($command)) {
 				}
 			}
 		}
-		if ($api == BLE_PLUS_OWNERS_API && empty($vin)) {
+		if ((($api == BLE_PLUS_OWNERS_API) || ($api == BLE_ONLY)) && empty($vin)) {
 			// error if vehicle command API is selected, but VIN is missing (not in API mapping)
 			$command_output =  $command_output."Vehicle command API is selected, but VIN is missing. Verify API settings.\n";
 			LOGDEB("send.php: VIN is missing, but required for Vehicle command API");
 			$command_error = true;
 		}
-		// Fallback to Owner's API, if BLE command is not available (yet)
-		if ($api == BLE_PLUS_OWNERS_API && empty($blecmd) && in_array(OWNERS_API, $command->API)) {
-			$api = OWNERS_API;
-			LOGDEB("send.php: fallback to Owner's API, because BLE command is not available (yet). NOTE: It may not work!");
+		// Fallback to Owner's API, if BLE command is not available (yet) and token is available. If token is not available, then an error is reported.
+		if ((($api == BLE_PLUS_OWNERS_API) || ($api == BLE_ONLY)) && empty($blecmd) && in_array(OWNERS_API, $command->API)) {
+			if (!empty($token)) {
+				$api = OWNERS_API;
+				LOGDEB("send.php: fallback to Owner's API, because BLE command is not available (yet). NOTE: It may not work!");
+			} else {
+				LOGERR("send.php: fallback to Owner's API not possible, because token is missing! Check API settings and verify that the token is valid.");
+				$command_error = true;
+			}
 		}
 	
-		if (($api == BLE_PLUS_OWNERS_API) && !empty($blecmd) && ($command->AUTH == true) && keyCheck($vin, $apidata->baseblecmd, PRIVATE_KEY) != 0) {
+		if ((($api == BLE_PLUS_OWNERS_API) || ($api == BLE_ONLY)) && !empty($blecmd) && ($command->AUTH == true) && keyCheck($vin, $apidata->baseblecmd, PRIVATE_KEY) != 0) {
 			// error if vehicle command API is selected, command requires authentication, but private key is missing
 			$command_output =  $command_output."Vehicle command API is selected and command requires authentication, but private key is missing.\n";
 			LOGDEB("send.php: BLE command requires authentication, but private key is missing.");
@@ -163,7 +174,7 @@ if(isset($command)) {
 
 		if (!$command_error) {
 			// select API - either owner's api or vehicle command via ble 
-			if ($api == OWNERS_API || empty($blecmd)) {
+			if (($api == OWNERS_API) || empty($blecmd)) {
 				if (empty($vin)) {
 					if ($command->TYPE == "GET") {
 						// for GET requests the parameters are provided with the URI
@@ -180,7 +191,7 @@ if(isset($command)) {
 					LOGOK("send.php: VIN: $vin, (vid: $vid), action: $action".$command_post_print.($force ? ", force: $force." : ", no force."));				
 				}
 			} else {
-				// $api == BLE_PLUS_OWNERS_API
+				// $api == BLE_PLUS_OWNERS_API or $api == BLE_ONLY
 				$baseblecmd = str_replace($command->TAG, $vin, $apidata->baseblecmd);
 
 				// if debug option is provided, then adjust debug in command if necessary (command line options override selected settings)

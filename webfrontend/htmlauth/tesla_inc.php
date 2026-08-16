@@ -776,7 +776,7 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 		if (($result_code2 == 0) && ($model === "OrangePi Zero3")) {
 			// restart bluetooth service on Orange PI Zero 3 - does not really work great
 			// and retry the command (one time - fixed)
-			LOGINF("tesla_shell_exec: restarting bluetooth, aw859a-bluetooth service and waiting for 5 seconds!");
+			LOGINF("tesla_shell_exec: restarting bluetooth, aw859a-bluetooth service!");
 			exec("sudo systemctl stop bluetooth.service aw859a-bluetooth.service", $output2, $result_code2);
 			exec("sudo /usr/sbin/modprobe -r sprdbt_tty", $output2, $result_code2);
 			exec("sudo /usr/sbin/modprobe -r sprdwl_ng", $output2, $result_code2);
@@ -785,18 +785,17 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 			exec("sudo /usr/sbin/modprobe sprdbt_tty", $output2, $result_code2);
 			sleep(1);
 			exec("sudo systemctl start aw859a-bluetooth.service bluetooth.service", $output2, $result_code2);
-			sleep(5);
 		}
 		// retry command depending on 'retries' setting
 		if ($retries == "0") {
 			LOGDEB("tesla_shell_exec: Last command will not be repeated, because 'retries' setting is set to 0 times!");
 		} else {
-			LOGDEB("tesla_shell_exec: Last command will be repeated after waiting for 8 seconds ...");				
-			sleep(8);
+			LOGDEB("tesla_shell_exec: Last command will be repeated after waiting for 5 seconds ...");				
+			sleep(5);
 			exec($command, $output, $result_code);
 			if (($retries == "2") && ($result_code != 0)) {
-				LOGDEB("tesla_shell_exec: Last command failed again and is repeated again after waiting 8 seconds ...");				
-				sleep(8);
+				LOGDEB("tesla_shell_exec: Last command failed again and is repeated again after waiting 5 seconds ...");				
+				sleep(5);
 				exec($command, $output, $result_code);
 			}
 		} 

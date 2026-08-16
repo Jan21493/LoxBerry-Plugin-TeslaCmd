@@ -780,6 +780,10 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 			exec("sudo systemctl stop bluetooth.service aw859a-bluetooth.service", $output2, $result_code2);
 			exec("sudo modprobe -r sprdbt_tty", $output2, $result_code2);
 			exec("sudo modprobe -r sprdwl_ng", $output2, $result_code2);
+			sleep(2);
+			exec("sudo modprobe sprdwl_ng", $output2, $result_code2);
+			exec("sudo modprobe sprdbt_tty", $output2, $result_code2);
+			sleep(1);
 			exec("sudo systemctl start aw859a-bluetooth.service bluetooth.service", $output2, $result_code2);
 			sleep(5);
 		}

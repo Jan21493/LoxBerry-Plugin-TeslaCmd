@@ -777,10 +777,10 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 			// restart bluetooth service on Orange PI Zero 3 - does not really work great
 			// and retry the command (one time - fixed)
 			LOGINF("tesla_shell_exec: restarting bluetooth, aw859a-bluetooth service and waiting for 5 seconds!");
-			exec("sudo systemctl stop bluetooth.target bluetooth.service aw859a-bluetooth.service", $output2, $result_code2);
+			exec("sudo systemctl stop bluetooth.service aw859a-bluetooth.service", $output2, $result_code2);
 			exec("sudo modprobe -r sprdbt_tty", $output2, $result_code2);
 			exec("sudo modprobe -r sprdwl_ng", $output2, $result_code2);
-			exec("sudo systemctl start aw859a-bluetooth.service bluetooth.service bluetooth.target", $output2, $result_code2);
+			exec("sudo systemctl start aw859a-bluetooth.service bluetooth.service", $output2, $result_code2);
 			sleep(5);
 		}
 		// retry command depending on 'retries' setting

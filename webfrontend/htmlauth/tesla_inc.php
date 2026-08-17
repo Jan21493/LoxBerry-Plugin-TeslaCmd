@@ -1253,7 +1253,7 @@ function read_api_data()
     	$apidata->connect_timeout = 20;
     	$apidata->tesla_debug = "off";
     	$apidata->ble_retries = 1;
-    	$apidata->bt_impl = "noble";
+    	$apidata->bt_impl = "goble";
 	} else {
 		LOGDEB("read_api_data: Reading content from API file: ".APIFILE);
 		$apidata = json_decode(file_get_contents(APIFILE));
@@ -1273,8 +1273,8 @@ function read_api_data()
 			$apidata->ble_retries = (int)$apidata->ble_retries;
 		else
 			$apidata->ble_retries = 1;
-		if (!isset($apidata->bt_impl) || !in_array($apidata->bt_impl, ["noble", "tinygo"]))
-			$apidata->bt_impl = "noble";
+		if (!isset($apidata->bt_impl) || !in_array($apidata->bt_impl, ["goble", "tinygo"]))
+			$apidata->bt_impl = "goble";
 
 		LOGDEB("read_api_data: command timeout: ".$apidata->command_timeout);
 		LOGDEB("read_api_data: connect timeout: ".$apidata->connect_timeout);

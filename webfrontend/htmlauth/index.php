@@ -288,7 +288,7 @@ if (isset($_GET['delete_token'])) {
     $apidata->connect_timeout = 0;
     $apidata->tesla_debug = 0;
     $apidata->ble_retries = 1;
-    $apidata->bt_impl = "noble";
+    $apidata->bt_impl = "goble";
     foreach ($_POST as $index => $entry) {
         if ($index == "command_timeout")  {
             $apidata->command_timeout = $entry;
@@ -621,7 +621,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
        <?php
         $teslaDebug = isset($apidata->tesla_debug) ? (int)$apidata->tesla_debug : 0;
         $bleRetries = isset($apidata->ble_retries) ? (int)$apidata->ble_retries : 1;
-        $btImpl = isset($apidata->bt_impl) ? $apidata->bt_impl : "noble";
+        $btImpl = isset($apidata->bt_impl) ? $apidata->bt_impl : "goble";
     ?>
     <table>
         <colgroup>
@@ -682,9 +682,9 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         <tr>
             <td>
                 <strong>Bluetooth stack</strong><br>
-                <span class="hint">Select the Bluetooth stack used for BLE communication. Use "Legacy / Raw-Socket BLE" (noble) for compatibility or "Standard Linux BlueZ D-Bus" (tinygo) for standard Linux systems.</span>
+                <span class="hint">Select the Bluetooth stack used for BLE communication. Use "Legacy / Raw-Socket BLE" (goble) for compatibility or "Standard Linux BlueZ D-Bus" (tinygo) for standard Linux systems.</span>
             </td>
-            <td class="ble-btimpl-cell" colspan="2"><input type="radio" id="bt_impl_noble" name="bt_impl" data-mini="true" value="noble" <?php if ($btImpl === "noble") echo 'checked="checked"'; ?>/><label for="bt_impl_noble">Legacy / Raw-Socket BLE</label></td>
+            <td class="ble-btimpl-cell" colspan="2"><input type="radio" id="bt_impl_goble" name="bt_impl" data-mini="true" value="goble" <?php if ($btImpl === "goble") echo 'checked="checked"'; ?>/><label for="bt_impl_goble">Legacy / Raw-Socket BLE</label></td>
             <td class="ble-btimpl-cell" colspan="2"><input type="radio" id="bt_impl_tinygo" name="bt_impl" data-mini="true" value="tinygo" <?php if ($btImpl === "tinygo") echo 'checked="checked"'; ?>/><label for="bt_impl_tinygo">Standard Linux BlueZ D-Bus</label></td>
         </tr>
     </table>   

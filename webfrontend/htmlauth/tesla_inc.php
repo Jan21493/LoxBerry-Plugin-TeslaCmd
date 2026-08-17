@@ -1253,6 +1253,7 @@ function read_api_data()
     	$apidata->connect_timeout = 20;
     	$apidata->tesla_debug = "off";
     	$apidata->ble_retries = 1;
+    	$apidata->bt_impl = "goble";
 	} else {
 		LOGDEB("read_api_data: Reading content from API file: ".APIFILE);
 		$apidata = json_decode(file_get_contents(APIFILE));
@@ -1272,6 +1273,8 @@ function read_api_data()
 			$apidata->ble_retries = (int)$apidata->ble_retries;
 		else
 			$apidata->ble_retries = 1;
+		if (!isset($apidata->bt_impl) || !in_array($apidata->bt_impl, ["goble", "tinygo"]))
+			$apidata->bt_impl = "goble";
 
 		LOGDEB("read_api_data: command timeout: ".$apidata->command_timeout);
 		LOGDEB("read_api_data: connect timeout: ".$apidata->connect_timeout);
@@ -1282,7 +1285,7 @@ function read_api_data()
 	$apidata->lock_timeout = $apidata->command_timeout + $apidata->connect_timeout + 1;
 	
 	// create generic tesla-control command with options
-	$apidata->baseblecmd = TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s ";
+	$apidata->baseblecmd = TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
 	if ($apidata->tesla_debug) {
 		$apidata->baseblecmd .= DEBUG_OPTION." ";
 	}
@@ -1423,7 +1426,7 @@ function get_ble_scan_distance($rssi)
 function tesla_ble_scan()
 {
 	$apidata = read_api_data();
-	$scanCmd = TESLA_BLESCAN.COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s ";
+	$scanCmd = TESLA_BLESCAN.COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
 	if ($apidata->tesla_debug) {
 		$scanCmd .= DEBUG_OPTION." ";
 	}

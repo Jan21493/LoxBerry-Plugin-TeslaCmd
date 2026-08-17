@@ -119,6 +119,35 @@ $localBleVehicles = read_local_ble_vehicles();
         opacity: 0 !important;
         pointer-events: none !important;
     }
+    .ble-btimpl-cell .ui-radio {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+    .ble-btimpl-cell .ui-radio .ui-btn {
+        margin-top: 0;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+    }
+    .ble-btimpl-cell .ui-radio .ui-btn-icon-left:after {
+        top: 50% !important;
+        margin-top: 0 !important;
+        transform: translateY(-50%);
+    }
+    .ble-btimpl-cell .ui-radio input[type="radio"] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        margin: -1px !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0 0 0 0) !important;
+        clip-path: inset(50%) !important;
+        white-space: nowrap !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
 
 </style>
 
@@ -259,6 +288,7 @@ if (isset($_GET['delete_token'])) {
     $apidata->connect_timeout = 0;
     $apidata->tesla_debug = 0;
     $apidata->ble_retries = 1;
+    $apidata->bt_impl = "noble";
     foreach ($_POST as $index => $entry) {
         if ($index == "command_timeout")  {
             $apidata->command_timeout = $entry;
@@ -268,6 +298,8 @@ if (isset($_GET['delete_token'])) {
             $apidata->tesla_debug = (int)($entry == "on");
         } elseif ($index == "ble_retries")  {
             $apidata->ble_retries = $entry;
+        } elseif ($index == "bt_impl")  {
+            $apidata->bt_impl = $entry;
         } 
     }
     write_api_data($apidata);
@@ -589,6 +621,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
        <?php
         $teslaDebug = isset($apidata->tesla_debug) ? (int)$apidata->tesla_debug : 0;
         $bleRetries = isset($apidata->ble_retries) ? (int)$apidata->ble_retries : 1;
+        $btImpl = isset($apidata->bt_impl) ? $apidata->bt_impl : "noble";
     ?>
     <table>
         <colgroup>
@@ -645,6 +678,14 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
             <td class="ble-retries-cell"><input type="radio" id="ble_retries0" name="ble_retries" data-mini="true" value="0" <?php if ($bleRetries === 0) echo 'checked="checked"'; ?>/><label for="ble_retries0">No retry</label></td>
             <td class="ble-retries-cell"><input type="radio" id="ble_retries1" name="ble_retries" data-mini="true" value="1" <?php if ($bleRetries === 1) echo 'checked="checked"'; ?>/><label for="ble_retries1">Retry once</label></td>
             <td class="ble-retries-cell"><input type="radio" id="ble_retries2" name="ble_retries" data-mini="true" value="2" <?php if ($bleRetries === 2) echo 'checked="checked"'; ?>/><label for="ble_retries2">Retry twice</label></td>
+        </tr>
+        <tr>
+            <td>
+                <strong>Bluetooth stack</strong><br>
+                <span class="hint">Select the Bluetooth stack used for BLE communication. Use "Legacy / Raw-Socket BLE" (noble) for compatibility or "Standard Linux BlueZ D-Bus" (tinygo) for standard Linux systems.</span>
+            </td>
+            <td class="ble-btimpl-cell" colspan="2"><input type="radio" id="bt_impl_noble" name="bt_impl" data-mini="true" value="noble" <?php if ($btImpl === "noble") echo 'checked="checked"'; ?>/><label for="bt_impl_noble">Legacy / Raw-Socket BLE</label></td>
+            <td class="ble-btimpl-cell" colspan="2"><input type="radio" id="bt_impl_tinygo" name="bt_impl" data-mini="true" value="tinygo" <?php if ($btImpl === "tinygo") echo 'checked="checked"'; ?>/><label for="bt_impl_tinygo">Standard Linux BlueZ D-Bus</label></td>
         </tr>
     </table>   
     <input type="submit" value="Save Vehicle Command API settings">

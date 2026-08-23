@@ -772,6 +772,16 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 		$model = str_replace("\0", '', $model); // remove null bytes
 		$model = trim($model);                  // removes \r, \n, spaces
 
+		if (!empty($output)) {
+			$output_string = implode("\n", $output);
+
+			// handling "operation already in progress
+			if (strpos($output_string, 'Operation already in progress') !== false) {
+				LOGWARN("tesla_shell_exec: BlueZ-Interfaces blocket. Restart bluetooth device ...");
+				exec("sudo bluetoothctl power off && sudo bluetoothctl power on");
+				sleep(1);
+			}
+		}
 		LOGINF("tesla_shell_exec: '$model' detected!");
 		if (($result_code2 == 0) && ($model === "OrangePi Zero3")) {
 			// restart bluetooth service on Orange PI Zero 3 - does not really work great

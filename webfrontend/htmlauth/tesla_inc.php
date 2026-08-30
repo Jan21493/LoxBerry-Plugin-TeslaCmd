@@ -706,7 +706,7 @@ function makeDir($path)
      return is_dir($path) || mkdir($path);
 }
 
-function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30, $exclusive = false)
+function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, $exclusive = false)
 {
 	$lockfile = "";
 	$lockHandle = NULL;
@@ -733,7 +733,7 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 			$lockfile = $tmpdir.'/ble.lock';
 			$lockHandle = fopen($lockfile, 'c');
 			if ($lockHandle !== false) {
-				$lockSeconds = max(30, (int)$lock_timeout) * ((int)$retries + 1);
+				$lockSeconds = max(1, (int)$lock_timeout);
 				$waitSeconds = 0;
 				LOGDEB("tesla_shell_exec: waiting for flock lock file: $lockfile, timeout: $lockSeconds seconds.");
 				while ($waitSeconds < $lockSeconds) {
@@ -746,7 +746,11 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 				}
 				LOGINF("tesla_shell_exec: Waiting time for BLE lock: $waitSeconds seconds.");
 				if (!$lockAcquired) {
-					LOGWARN("tesla_shell_exec: Timeout while waiting for BLE lock. Continue without exclusive access.");
+					LOGWARN("tesla_shell_exec: BLE interface still busy. Skipping this command.");
+					if ($lockHandle !== false) {
+						fclose($lockHandle);
+					}
+					return 1; 
 				}
 			} else {
 				LOGERR("tesla_shell_exec: can't open lock file: $lockfile. Try command without exclusive access!");
@@ -767,35 +771,40 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 30,
 		LOGWARN("tesla_shell_exec: command has returned an error! The result code was: " . $result_code);
 		// On an Orange PI zero 3 with DietPi v9.7.1 (Bookworm, released July 2024) the command returned errors after typically 1-2 hours
 		// so this 'dirty' fix was added that restarts the bluetooth service. There might be an error in the bluetooth driver that I can't fix.
-		exec("cat /sys/firmware/devicetree/base/model", $output2, $result_code2);
-		$model = isset($output2[0]) ? $output2[0] : '';
-		$model = str_replace("\0", '', $model); // remove null bytes
-		$model = trim($model);                  // removes \r, \n, spaces
 
+		// Hardware diagnostics for SBC. This is only for informational logging.
+		$sbc_model = "Unknown Hardware";
+		if (file_exists("/sys/firmware/devicetree/base/model")) {
+			$sbc_model = @file_get_contents("/sys/firmware/devicetree/base/model");
+			$sbc_model = str_replace("\0", '', $sbc_model);
+			$sbc_model = trim($sbc_model);
+		}
+		// Hardware diagnostics for SBBluetooth adapter type. 
+		$bt_type = "Unknown Bus";
+		if (file_exists("/sys/class/bluetooth/hci0/device/subsystem")) {
+			$subsystem_path = @readlink("/sys/class/bluetooth/hci0/device/subsystem");
+			if ($subsystem_path !== false) {
+				if (strpos($subsystem_path, 'usb') !== false) {
+					$bt_type = "USB Dongle";
+				} elseif (strpos($subsystem_path, 'amba') !== false || strpos($subsystem_path, 'platform') !== false) {
+					$bt_type = "Onboard UART / Platform-Chip";
+				}
+			}
+		}
+		LOGINF("tesla_shell_exec DIAGNOSTICS: Running on '$sbc_model' with hci0 Adapter via '$bt_type'.");
+		
+		// Report error output for debugging and restart bluetooth service if required
 		if (!empty($output)) {
 			$output_string = implode("\n", $output);
 
-			// handling "operation already in progress
+			// Universeller D-Bus/BlueZ-Reset for all platforms (USB-Dongle friendly)
 			if (strpos($output_string, 'Operation already in progress') !== false) {
-				LOGWARN("tesla_shell_exec: BlueZ-Interfaces blocket. Restart bluetooth device ...");
-				exec("sudo bluetoothctl power off && sudo bluetoothctl power on");
+				LOGWARN("tesla_shell_exec: BlueZ interface blocked. Resetting controller via software ...");
+				exec("sudo /usr/bin/bluetoothctl power off && sudo /usr/bin/bluetoothctl power on", $output2, $result_code2);
 				sleep(1);
 			}
 		}
-		LOGINF("tesla_shell_exec: '$model' detected!");
-		if (($result_code2 == 0) && ($model === "OrangePi Zero3")) {
-			// restart bluetooth service on Orange PI Zero 3 - does not really work great
-			// and retry the command (one time - fixed)
-			LOGINF("tesla_shell_exec: restarting bluetooth, aw859a-bluetooth service!");
-			exec("sudo systemctl stop bluetooth.service aw859a-bluetooth.service", $output2, $result_code2);
-			exec("sudo /usr/sbin/modprobe -r sprdbt_tty", $output2, $result_code2);
-			exec("sudo /usr/sbin/modprobe -r sprdwl_ng", $output2, $result_code2);
-			sleep(2);
-			exec("sudo /usr/sbin/modprobe sprdwl_ng", $output2, $result_code2);
-			exec("sudo /usr/sbin/modprobe sprdbt_tty", $output2, $result_code2);
-			sleep(1);
-			exec("sudo systemctl start aw859a-bluetooth.service bluetooth.service", $output2, $result_code2);
-		}
+
 		// retry command depending on 'retries' setting
 		if ($retries == "0") {
 			LOGDEB("tesla_shell_exec: Last command will not be repeated, because 'retries' setting is set to 0 times!");
@@ -1261,6 +1270,7 @@ function read_api_data()
 		$apidata = new stdClass();
 		$apidata->command_timeout = 5;
     	$apidata->connect_timeout = 20;
+    	$apidata->lock_timeout = 5;
     	$apidata->tesla_debug = "off";
     	$apidata->ble_retries = 1;
     	$apidata->bt_impl = "goble";
@@ -1275,6 +1285,10 @@ function read_api_data()
 			$apidata->connect_timeout = (int)$apidata->connect_timeout;
 		else
 			$apidata->connect_timeout = 20;
+		if (is_numeric($apidata->lock_timeout))
+			$apidata->lock_timeout = (int)$apidata->lock_timeout;
+		else
+			$apidata->lock_timeout = 5;
 		if (is_numeric($apidata->tesla_debug))
 			$apidata->tesla_debug = (int)$apidata->tesla_debug;
 		else
@@ -1288,14 +1302,16 @@ function read_api_data()
 
 		LOGDEB("read_api_data: command timeout: ".$apidata->command_timeout);
 		LOGDEB("read_api_data: connect timeout: ".$apidata->connect_timeout);
+		LOGDEB("read_api_data: lock timeout: ".$apidata->lock_timeout);
 		LOGDEB("read_api_data: debug option: ".$apidata->tesla_debug);
 		LOGDEB("read_api_data: retries: ".$apidata->ble_retries);
 	}
+	// calculate total timeout for Linux 'timeout' command (connect + command + 3 seconds buffer)
+	$linux_process_timeout = (int)$apidata->connect_timeout + (int)$apidata->command_timeout + 3;
 
-	$apidata->lock_timeout = $apidata->command_timeout + $apidata->connect_timeout + 1;
-	
+
 	// create generic tesla-control command with options
-	$apidata->baseblecmd = TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
+	$apidata->baseblecmd = "timeout ".$linux_process_timeout."s ".TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
 	if ($apidata->tesla_debug) {
 		$apidata->baseblecmd .= DEBUG_OPTION." ";
 	}

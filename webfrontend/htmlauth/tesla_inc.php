@@ -798,7 +798,8 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, 
 			$output_string = implode("\n", $output);
 
 			// Universeller D-Bus/BlueZ-Reset for all platforms (USB-Dongle friendly)
-			if (strpos($output_string, 'Operation already in progress') !== false) {
+			if ((strpos($output_string, 'Operation already in progress') !== false)||
+				(strpos($output_string, 'bluetooth: adaptor is not powered') !== false)) {
 				LOGWARN("tesla_shell_exec: BlueZ interface blocked. Resetting controller via software ...");
 				exec("sudo /usr/bin/bluetoothctl power off && sudo /usr/bin/bluetoothctl power on", $output2, $result_code2);
 				sleep(1);

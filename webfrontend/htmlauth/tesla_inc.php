@@ -276,17 +276,19 @@ function tesla_query( $VID, $action, $params=false, $force=false )
 					LOGDEB("tesla_query: $type: timeout $timeout");
 				}
 			} else {
-				//echo "<br>RESPONSE: ";var_dump($data->response);echo "<br><br>";
+				// no error, process response
 				if (isset($data->response)) {
 					$returndata = $data->response;
 					if (isset($returndata->id)){
-						LOGDEB('if(isset($returndata->id))');
+						LOGDEB('ID ('.$returndata->id.') exists, publishing to MQTT with topic /'.$returndata->id.'/'.strtolower($action));
 						mqttpublish($returndata, "/$returndata->id/".strtolower($action));
 					} else {
 						// [ ] Bugfix empty $VID
 						if (!empty($VID)){
+							LOGDEB('VID ('.$VID.') exists, publishing to MQTT with topic /'.$VID.'/'.strtolower($action));
 							mqttpublish($returndata, "/$VID/".strtolower($action));
 						} else {
+							LOGDEB('VID is empty, publishing to MQTT with topic /'.strtolower($action));
 							mqttpublish($returndata, "/".strtolower($action));
 						}
 					}
@@ -416,9 +418,23 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_retr
 			$logdata .= '"'.$line.'"';
 			unset($output[$key]);
 		} else {
-			$jsondata .= $line.' ';
+			if ((strpos($line, 'Error') === 0)) {
+				// skip these lines from JSON data
+				if (!empty($logdata))
+					$logdata .= ', ';
+				$logdata .= '"'.$line.'"';
+				unset($output[$key]);
+				
+			} else if (trim($line) === '') {
+				// skip empty lines
+				unset($output[$key]);
+			} else {
+				$jsondata .= $line.' ';
+			}
 		}
 	} 
+	//LOGDEB("<pre>JSONDATA:<br>".var_export($jsondata, true)."</pre>");
+
 	$rawdata = '{"result_code":'.$result_code.', ';
 	$rawdata .= '"result_msg":"'.get_result_code_msg($result_code).'", ';
 	$rawdata .= '"sentAtTimeLox":'.epoch2lox().', ';

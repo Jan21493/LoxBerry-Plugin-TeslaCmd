@@ -1347,6 +1347,85 @@ function read_api_data()
 	return $apidata;
 }
 
+function get_hciconfig_adapter_details()
+{
+	$details = [];
+
+	@exec("hciconfig -a 2>/dev/null", $hciconfigOutput, $hciconfigRc);
+	if ((int)$hciconfigRc !== 0 || !is_array($hciconfigOutput)) {
+		return $details;
+	}
+
+	$currentAdapter = "";
+	foreach ($hciconfigOutput as $line) {
+		$line = rtrim((string)$line, "\r\n");
+		if (preg_match('/^(hci[0-9]+):\s+Type:\s+[^ ]+\s+Bus:\s+([A-Za-z0-9_-]+)/', $line, $match)) {
+			$currentAdapter = $match[1];
+			$details[$currentAdapter] = [
+				"bus" => strtoupper($match[2])
+			];
+			continue;
+		}
+
+		if (empty($currentAdapter)) {
+			continue;
+		}
+
+		if (preg_match('/^\s*Manufacturer:\s*(.+)$/', $line, $match)) {
+			$details[$currentAdapter]["manufacturer"] = trim($match[1]);
+		} elseif (preg_match('/^\s*HCI Version:\s*([^,]+)(?:,\s*(.+))?$/', $line, $match)) {
+			$details[$currentAdapter]["hci_version"] = trim($match[1]);
+			if (!empty($match[2])) {
+				$details[$currentAdapter]["hci_revision"] = trim($match[2]);
+			}
+		}
+	}
+
+	return $details;
+}
+
+function normalize_bluetooth_bus_type($busType)
+{
+	$busType = strtoupper(trim((string)$busType));
+	if ($busType === "USB") {
+		return "USB dongle";
+	}
+	if ($busType === "UART") {
+		return "UART adapter";
+	}
+	if ($busType === "PCI") {
+		return "PCI adapter";
+	}
+	if ($busType === "SDIO") {
+		return "SDIO adapter";
+	}
+	return "Unknown bus";
+}
+
+function get_soc_bluetooth_hint($sbcModel, $compatibleRaw)
+{
+	$sbcModel = trim((string)$sbcModel);
+	$compatibleRaw = strtolower(trim((string)$compatibleRaw));
+
+	if (stripos($sbcModel, "raspberry pi") !== false) {
+		return "Raspberry Pi onboard Bluetooth";
+	}
+	if (strpos($compatibleRaw, "rockchip") !== false) {
+		return "Rockchip onboard Bluetooth";
+	}
+	if (strpos($compatibleRaw, "allwinner") !== false) {
+		return "Allwinner onboard Bluetooth";
+	}
+	if (strpos($compatibleRaw, "amlogic") !== false) {
+		return "Amlogic onboard Bluetooth";
+	}
+	if (strpos($compatibleRaw, "brcm") !== false || strpos($compatibleRaw, "bcm") !== false) {
+		return "Broadcom/Cypress onboard Bluetooth";
+	}
+
+	return "";
+}
+
 function get_bluetooth_adapters()
 {
 	$adapters = [];
@@ -1364,6 +1443,28 @@ function get_bluetooth_adapters()
 				$lsusbMap[strtolower($match[1])] = trim($match[2]);
 			}
 		}
+	}
+
+	$knownUsbAdapters = [
+		"0bda:a725" => "Realtek Bluetooth USB-Adapter (RTL8761B)",
+		"0bda:a728" => "Realtek Bluetooth 5.4 USB-Adapter (RTL8761BU or newer)",
+		"0a12:0001" => "CSR8510 A10 Bluetooth USB-Adapter",
+		"0a5c:21e8" => "Broadcom BCM20702A0 Bluetooth USB-Adapter",
+		"8087:0026" => "Intel Wireless Bluetooth adapter",
+		"8087:0032" => "Intel Wireless Bluetooth adapter",
+		"8087:0033" => "Intel Wireless Bluetooth adapter"
+	];
+
+	$hciconfigDetails = get_hciconfig_adapter_details();
+	$sbcModel = "";
+	if (file_exists("/sys/firmware/devicetree/base/model")) {
+		$sbcModel = str_replace("\0", "", (string)@file_get_contents("/sys/firmware/devicetree/base/model"));
+		$sbcModel = trim($sbcModel);
+	}
+	$compatibleRaw = "";
+	if (file_exists("/sys/firmware/devicetree/base/compatible")) {
+		$compatibleRaw = str_replace("\0", ",", (string)@file_get_contents("/sys/firmware/devicetree/base/compatible"));
+		$compatibleRaw = trim($compatibleRaw, ", \t\n\r\0\x0B");
 	}
 
 	$adapterPaths = glob('/sys/class/bluetooth/hci*');
@@ -1389,12 +1490,25 @@ function get_bluetooth_adapters()
 				$busType = "PCI adapter";
 			}
 		}
+		if (isset($hciconfigDetails[$adapterId]["bus"]) && !empty($hciconfigDetails[$adapterId]["bus"])) {
+			$busType = normalize_bluetooth_bus_type($hciconfigDetails[$adapterId]["bus"]);
+		}
 
 		$vendorId = "";
 		$productId = "";
 		$manufacturer = "";
 		$productName = "";
 		$chipHint = "";
+		$hciManufacturer = "";
+		$hciVersion = "";
+		$knownAdapterName = "";
+
+		if (isset($hciconfigDetails[$adapterId]["manufacturer"])) {
+			$hciManufacturer = trim((string)$hciconfigDetails[$adapterId]["manufacturer"]);
+		}
+		if (isset($hciconfigDetails[$adapterId]["hci_version"])) {
+			$hciVersion = trim((string)$hciconfigDetails[$adapterId]["hci_version"]);
+		}
 
 		$sysDevicePath = realpath($adapterPath.'/device');
 		$usbDevicePath = $sysDevicePath;
@@ -1417,14 +1531,31 @@ function get_bluetooth_adapters()
 			if (isset($lsusbMap[$chipKey]) && !empty($lsusbMap[$chipKey])) {
 				$chipHint = $lsusbMap[$chipKey];
 			}
+			if (isset($knownUsbAdapters[$chipKey])) {
+				$knownAdapterName = $knownUsbAdapters[$chipKey];
+			}
 		}
 
 		$labelDetails = [];
+		if (!empty($knownAdapterName)) {
+			$labelDetails[] = $knownAdapterName;
+		}
+		$onboardHint = "";
+		if (($busType === "UART adapter" || $busType === "Onboard adapter" || $busType === "SDIO adapter")
+			&& empty($knownAdapterName)) {
+			$onboardHint = get_soc_bluetooth_hint($sbcModel, $compatibleRaw);
+		}
+		if (!empty($onboardHint)) {
+			$labelDetails[] = $onboardHint;
+		}
 		if (!empty($manufacturer)) {
 			$labelDetails[] = $manufacturer;
 		}
 		if (!empty($productName)) {
 			$labelDetails[] = $productName;
+		}
+		if (empty($manufacturer) && !empty($hciManufacturer)) {
+			$labelDetails[] = $hciManufacturer;
 		}
 		if (empty($labelDetails) && !empty($chipHint)) {
 			$labelDetails[] = $chipHint;
@@ -1447,10 +1578,28 @@ function get_bluetooth_adapters()
 				$labelDetails[] = $chipHint;
 			}
 		}
+		if (!empty($hciVersion)) {
+			$labelDetails[] = "HCI ".$hciVersion;
+		}
+
+		$dedupedLabelDetails = [];
+		$seenDetails = [];
+		foreach ($labelDetails as $detail) {
+			$detail = trim((string)$detail);
+			if ($detail === "") {
+				continue;
+			}
+			$key = strtolower($detail);
+			if (isset($seenDetails[$key])) {
+				continue;
+			}
+			$seenDetails[$key] = true;
+			$dedupedLabelDetails[] = $detail;
+		}
 
 		$adapter = new stdClass();
 		$adapter->id = $adapterId;
-		$adapter->label = $adapterId." - ".implode(" / ", $labelDetails);
+		$adapter->label = $adapterId." - ".implode(" / ", $dedupedLabelDetails);
 		$adapters[] = $adapter;
 	}
 

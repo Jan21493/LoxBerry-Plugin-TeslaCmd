@@ -289,6 +289,7 @@ if (isset($_GET['delete_token'])) {
     $apidata->tesla_debug = 0;
     $apidata->ble_retries = 1;
     $apidata->bt_impl = "goble";
+    $apidata->bt_adapter = "default";
     foreach ($_POST as $index => $entry) {
         if ($index == "command_timeout")  {
             $apidata->command_timeout = $entry;
@@ -300,6 +301,8 @@ if (isset($_GET['delete_token'])) {
             $apidata->ble_retries = $entry;
         } elseif ($index == "bt_impl")  {
             $apidata->bt_impl = $entry;
+        } elseif ($index == "bt_adapter")  {
+            $apidata->bt_adapter = $entry;
         } 
     }
     write_api_data($apidata);
@@ -622,6 +625,21 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         $teslaDebug = isset($apidata->tesla_debug) ? (int)$apidata->tesla_debug : 0;
         $bleRetries = isset($apidata->ble_retries) ? (int)$apidata->ble_retries : 1;
         $btImpl = isset($apidata->bt_impl) ? $apidata->bt_impl : "goble";
+        $btAdapter = isset($apidata->bt_adapter) ? $apidata->bt_adapter : "default";
+        $bluetoothAdapters = get_bluetooth_adapters();
+        $btAdapterKnown = false;
+        foreach ($bluetoothAdapters as $adapterEntry) {
+            if ($adapterEntry->id === $btAdapter) {
+                $btAdapterKnown = true;
+                break;
+            }
+        }
+        if (!$btAdapterKnown && preg_match('/^hci[0-9]+$/', $btAdapter)) {
+            $customAdapter = new stdClass();
+            $customAdapter->id = $btAdapter;
+            $customAdapter->label = $btAdapter." - currently not connected";
+            $bluetoothAdapters[] = $customAdapter;
+        }
     ?>
     <table>
         <colgroup>
@@ -686,6 +704,23 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
             </td>
             <td class="ble-btimpl-cell" colspan="2"><input type="radio" id="bt_impl_goble" name="bt_impl" data-mini="true" value="goble" <?php if ($btImpl === "goble") echo 'checked="checked"'; ?>/><label for="bt_impl_goble">Legacy / Raw-Socket BLE</label></td>
             <td class="ble-btimpl-cell" colspan="2"><input type="radio" id="bt_impl_tinygo" name="bt_impl" data-mini="true" value="tinygo" <?php if ($btImpl === "tinygo") echo 'checked="checked"'; ?>/><label for="bt_impl_tinygo">Standard Linux BlueZ D-Bus</label></td>
+        </tr>
+        <tr>
+            <td>
+                <label for="bt_adapter"><strong>Bluetooth adapter</strong><br>
+                <span class="hint">Select the Bluetooth adapter for tesla-control and tesla-blescan. "Default" maps to hci0.</span></label>
+            </td>
+            <td colspan="4">
+                <select name="bt_adapter" id="bt_adapter" data-mini="true">
+<?php
+        foreach ($bluetoothAdapters as $adapterEntry) {
+?>
+                    <option value="<?php echo htmlspecialchars($adapterEntry->id); ?>" <?php if ($btAdapter === $adapterEntry->id) echo 'selected="selected"'; ?>><?php echo htmlspecialchars($adapterEntry->label); ?></option>
+<?php
+        }
+?>
+                </select>
+            </td>
         </tr>
     </table>   
     <input type="submit" value="Save Vehicle Command API settings">

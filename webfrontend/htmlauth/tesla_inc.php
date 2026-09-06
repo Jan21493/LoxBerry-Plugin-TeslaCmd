@@ -1275,9 +1275,10 @@ function read_api_data()
     	$apidata->tesla_debug = "off";
     	$apidata->ble_retries = 1;
     	$apidata->bt_impl = "goble";
+    	$apidata->bt_adapter = "default";
 	} else {
-		LOGDEB("read_api_data: Reading content from API file: ".APIFILE);
-		$apidata = json_decode(file_get_contents(APIFILE));
+    	LOGDEB("read_api_data: Reading content from API file: ".APIFILE);
+    	$apidata = json_decode(file_get_contents(APIFILE));
 		if (is_numeric($apidata->command_timeout))
 			$apidata->command_timeout = (int)$apidata->command_timeout;
 		else
@@ -1300,12 +1301,18 @@ function read_api_data()
 			$apidata->ble_retries = 1;
 		if (!isset($apidata->bt_impl) || !in_array($apidata->bt_impl, ["goble", "tinygo"]))
 			$apidata->bt_impl = "goble";
+		if (!isset($apidata->bt_adapter) || !is_string($apidata->bt_adapter))
+			$apidata->bt_adapter = "default";
+		$apidata->bt_adapter = trim($apidata->bt_adapter);
+		if ($apidata->bt_adapter !== "default" && !preg_match('/^hci[0-9]+$/', $apidata->bt_adapter))
+			$apidata->bt_adapter = "default";
 
 		LOGDEB("read_api_data: command timeout: ".$apidata->command_timeout);
 		LOGDEB("read_api_data: connect timeout: ".$apidata->connect_timeout);
 		LOGDEB("read_api_data: lock timeout: ".$apidata->lock_timeout);
 		LOGDEB("read_api_data: debug option: ".$apidata->tesla_debug);
 		LOGDEB("read_api_data: retries: ".$apidata->ble_retries);
+		LOGDEB("read_api_data: bluetooth adapter: ".$apidata->bt_adapter);
 	}
 	// calculate total timeout for Linux 'timeout' command (connect + command + 3 seconds buffer)
 	$linux_process_timeout = (int)$apidata->connect_timeout + (int)$apidata->command_timeout + 3;
@@ -1313,12 +1320,125 @@ function read_api_data()
 
 	// create generic tesla-control command with options
 	$apidata->baseblecmd = "timeout ".$linux_process_timeout."s ".TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
+	if ($apidata->bt_adapter !== "default") {
+		$apidata->baseblecmd .= "-bt-adapter ".escapeshellarg($apidata->bt_adapter)." ";
+	}
 	if ($apidata->tesla_debug) {
 		$apidata->baseblecmd .= DEBUG_OPTION." ";
 	}
 	$apidata->baseblecmd .= COMMAND_TAG;
 	LOGDEB("read_api_data: base command with options: ".$apidata->baseblecmd);
 	return $apidata;
+}
+
+function get_bluetooth_adapters()
+{
+	$adapters = [];
+
+	$defaultAdapter = new stdClass();
+	$defaultAdapter->id = "default";
+	$defaultAdapter->label = "Default (hci0)";
+	$adapters[] = $defaultAdapter;
+
+	$lsusbMap = [];
+	@exec("lsusb 2>/dev/null", $lsusbOutput, $lsusbRc);
+	if ((int)$lsusbRc === 0 && is_array($lsusbOutput)) {
+		foreach ($lsusbOutput as $line) {
+			if (preg_match('/ID\s+([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\s*(.*)$/', $line, $match)) {
+				$lsusbMap[strtolower($match[1])] = trim($match[2]);
+			}
+		}
+	}
+
+	$adapterPaths = glob('/sys/class/bluetooth/hci*');
+	if (!is_array($adapterPaths)) {
+		return $adapters;
+	}
+	sort($adapterPaths);
+
+	foreach ($adapterPaths as $adapterPath) {
+		$adapterId = basename($adapterPath);
+		if (!preg_match('/^hci[0-9]+$/', $adapterId)) {
+			continue;
+		}
+
+		$busType = "Unknown bus";
+		$subsystemPath = @readlink($adapterPath.'/device/subsystem');
+		if ($subsystemPath !== false) {
+			if (strpos($subsystemPath, 'usb') !== false) {
+				$busType = "USB dongle";
+			} elseif (strpos($subsystemPath, 'platform') !== false || strpos($subsystemPath, 'amba') !== false) {
+				$busType = "Onboard adapter";
+			} elseif (strpos($subsystemPath, 'pci') !== false) {
+				$busType = "PCI adapter";
+			}
+		}
+
+		$vendorId = "";
+		$productId = "";
+		$manufacturer = "";
+		$productName = "";
+		$chipHint = "";
+
+		$sysDevicePath = realpath($adapterPath.'/device');
+		$usbDevicePath = $sysDevicePath;
+		while (!empty($usbDevicePath) && $usbDevicePath !== '/' && !file_exists($usbDevicePath.'/idVendor')) {
+			$parent = dirname($usbDevicePath);
+			if ($parent === $usbDevicePath) {
+				break;
+			}
+			$usbDevicePath = $parent;
+		}
+		if (!empty($usbDevicePath) && file_exists($usbDevicePath.'/idVendor') && file_exists($usbDevicePath.'/idProduct')) {
+			$vendorId = strtolower(trim((string)@file_get_contents($usbDevicePath.'/idVendor')));
+			$productId = strtolower(trim((string)@file_get_contents($usbDevicePath.'/idProduct')));
+			$manufacturer = trim((string)@file_get_contents($usbDevicePath.'/manufacturer'));
+			$productName = trim((string)@file_get_contents($usbDevicePath.'/product'));
+		}
+
+		if (!empty($vendorId) && !empty($productId)) {
+			$chipKey = $vendorId.":".$productId;
+			if (isset($lsusbMap[$chipKey]) && !empty($lsusbMap[$chipKey])) {
+				$chipHint = $lsusbMap[$chipKey];
+			}
+		}
+
+		$labelDetails = [];
+		if (!empty($manufacturer)) {
+			$labelDetails[] = $manufacturer;
+		}
+		if (!empty($productName)) {
+			$labelDetails[] = $productName;
+		}
+		if (empty($labelDetails) && !empty($chipHint)) {
+			$labelDetails[] = $chipHint;
+		}
+		if (empty($labelDetails)) {
+			$labelDetails[] = $busType;
+		}
+		if (!empty($vendorId) && !empty($productId)) {
+			$labelDetails[] = strtoupper($vendorId).":".strtoupper($productId);
+		}
+		if (!empty($chipHint)) {
+			$chipHintIncluded = false;
+			foreach ($labelDetails as $detail) {
+				if ($detail === $chipHint) {
+					$chipHintIncluded = true;
+					break;
+				}
+			}
+			if (!$chipHintIncluded) {
+				$labelDetails[] = $chipHint;
+			}
+		}
+
+		$adapter = new stdClass();
+		$adapter->id = $adapterId;
+		$adapter->label = $adapterId." - ".implode(" / ", $labelDetails);
+		$adapters[] = $adapter;
+	}
+
+	return $adapters;
 }
 
 function object_count($object)
@@ -1454,6 +1574,9 @@ function tesla_ble_scan()
 {
 	$apidata = read_api_data();
 	$scanCmd = TESLA_BLESCAN.COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
+	if ($apidata->bt_adapter !== "default") {
+		$scanCmd .= "-bt-adapter ".escapeshellarg($apidata->bt_adapter)." ";
+	}
 	if ($apidata->tesla_debug) {
 		$scanCmd .= DEBUG_OPTION." ";
 	}

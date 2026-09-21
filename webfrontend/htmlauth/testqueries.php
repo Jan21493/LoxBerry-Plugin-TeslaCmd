@@ -9,7 +9,7 @@ $log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
 LOGSTART("Start Logging - testqueries.php");
 
 LOGINF("testqueries.php: -------------------- start of testqueries.php -------------------- ");
-LOGDEB("send.php: Source IP-address: ".$_SERVER['REMOTE_ADDR']);
+LOGDEB("testqueries.php: Source IP-address: ".$_SERVER['REMOTE_ADDR']);
 
 require_once "defines.php";
 require_once "tesla_inc.php";
@@ -42,6 +42,7 @@ if(!empty($_REQUEST["action"])) {
 
 //Checktoken
 $tokenvalid = tesla_checktoken();
+LOGDEB("testqueries.php: tesla_checktoken called, token valid: ".$tokenvalid);
 $tokenexpires = 0;
 if (!empty($login->bearer_token)) {
     $tokenparts = explode(".", $login->bearer_token);
@@ -53,6 +54,7 @@ if (!empty($login->bearer_token)) {
 $ownerVehicles = new stdClass();
 if($tokenvalid) {
 	$ownerVehicles = tesla_summary();
+	LOGDEB("testqueries.php: tesla_summary called, owner vehicles retrieved: ");
 }
 $vehicles = get_all_vehicles($ownerVehicles);
 $apidata = read_api_data();

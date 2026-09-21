@@ -222,7 +222,7 @@ function tesla_check_parameter($action, $values)
 }
 
 
-function tesla_query( $VID, $action, $params=false, $force=false )
+function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 {
 	// Function to send query to tesla api
 
@@ -233,8 +233,8 @@ function tesla_query( $VID, $action, $params=false, $force=false )
 	$action = strtoupper($action);
 	$type = $commands->{"$action"}->TYPE;
 	$uri = $commands->{"$action"}->URI;
-	$uri = str_replace("{vehicle_tag}", "$VID", $uri);
-	$uri = str_replace("{energy_site_id}", "$VID", $uri);
+	$uri = str_replace("{vehicle_tag}", "$vehicle_tag", $uri);
+	$uri = str_replace("{energy_site_id}", "$vehicle_tag", $uri);
 	$timeout = 10;
 
 	LOGINF("tesla_query: $action: start");
@@ -258,7 +258,7 @@ function tesla_query( $VID, $action, $params=false, $force=false )
 					LOGINF("Query: Vehicle unavailable, wakeup car.");
 
 					$wake_up_uri = $commands->{"WAKE_UP"}->URI;
-					$wake_up_uri = str_replace("{vehicle_tag}", "$VID", $wake_up_uri);
+					$wake_up_uri = str_replace("{vehicle_tag}", "$vehicle_tag", $wake_up_uri);
 					LOGDEB("tesla_query: $type: $wake_up_uri");
 					$rawdata = json_decode(preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$wake_up_uri, false, true)));
 					$data = json_decode($rawdata);
@@ -279,14 +279,24 @@ function tesla_query( $VID, $action, $params=false, $force=false )
 				// no error, process response
 				if (isset($data->response)) {
 					$returndata = $data->response;
-					if (isset($returndata->id)){
+					# Prefer matching Tag if available, then VIN over Vehicle ID (VID) if available
+					if (isset($returndata->vin) && ($returndata->vin == $vehicle_tag)){
+						LOGDEB('VIN ('.$returndata->vin.') exists, publishing to MQTT with topic /'.$returndata->vin.'/'.strtolower($action));
+						mqttpublish($returndata, "/$returndata->vin/".strtolower($action));
+					} elseif (isset($returndata->id) && ($returndata->id == $vehicle_tag)){
 						LOGDEB('ID ('.$returndata->id.') exists, publishing to MQTT with topic /'.$returndata->id.'/'.strtolower($action));
 						mqttpublish($returndata, "/$returndata->id/".strtolower($action));
+					} elseif (isset($returndata->vin)){
+						LOGDEB('VIN ('.$returndata->vin.') exists, publishing to MQTT with topic /'.$returndata->vin.'/'.strtolower($action).' - but vehicle tag ('.$vehicle_tag.') does not match');
+						mqttpublish($returndata, "/$returndata->vin/".strtolower($action));
+					} elseif (isset($returndata->id)){
+						LOGDEB('ID ('.$returndata->id.') exists, publishing to MQTT with topic /'.$returndata->id.'/'.strtolower($action).' - but vehicle tag ('.$vehicle_tag.') does not match');
+						mqttpublish($returndata, "/$returndata->id/".strtolower($action));
 					} else {
-						// [ ] Bugfix empty $VID
-						if (!empty($VID)){
-							LOGDEB('VID ('.$VID.') exists, publishing to MQTT with topic /'.$VID.'/'.strtolower($action));
-							mqttpublish($returndata, "/$VID/".strtolower($action));
+						// [ ] Bugfix empty $vehicle_tag
+						if (!empty($vehicle_tag)){
+							LOGDEB('VID ('.$vehicle_tag.') exists, publishing to MQTT with topic /'.$vehicle_tag.'/'.strtolower($action));
+							mqttpublish($returndata, "/$vehicle_tag/".strtolower($action));
 						} else {
 							LOGDEB('VID is empty, publishing to MQTT with topic /'.strtolower($action));
 							mqttpublish($returndata, "/".strtolower($action));
@@ -314,7 +324,7 @@ function tesla_query( $VID, $action, $params=false, $force=false )
 					LOGINF("Query: Vehicle unavailable, wakeup car.");
 					
 					$wake_up_uri = $commands->{"WAKE_UP"}->URI;
-					$wake_up_uri = str_replace("{vehicle_tag}", "$VID", $wake_up_uri);
+					$wake_up_uri = str_replace("{vehicle_tag}", "$vehicle_tag", $wake_up_uri);
 					LOGDEB("tesla_query: $type: $wake_up_uri");
 					$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$wake_up_uri, false, true));
 					$data = json_decode($rawdata);

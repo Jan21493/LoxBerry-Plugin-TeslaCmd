@@ -237,6 +237,9 @@ function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 	$uri = str_replace("{energy_site_id}", "$vehicle_tag", $uri);
 	$timeout = 10;
 
+	// Verify if $params is an array and convert it into a URL string
+	$query_string = is_array($params) ? http_build_query($params) : $params;
+
 	LOGINF("tesla_query: $action: start");
 
 	while($timeout > -1) {
@@ -244,9 +247,9 @@ function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 			//GET
 			LOGDEB("tesla_query: $type: $uri");
 			//$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, false ));
-			
+
 			// Reformat output from 'curl' command. Add params to URI for GET requests
-			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri."?".$params, false ));
+			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri."?".$query_string, false ));
 			$data = json_decode($rawdata);
 			$data->response->{"sentAtTimeLox"} = epoch2lox();
 			$data->response->{"sentAtTimeISO"} = currtime();
@@ -304,7 +307,7 @@ function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 					}
 				} else {
 					//[x] fixed status output
-						mqttpublish($rawdata, "/".strtolower($action));
+					mqttpublish($rawdata, "/".strtolower($action));
 				}
 				LOGOK("Query: $action: success");
 				break;
@@ -313,7 +316,7 @@ function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 			//POST
 			LOGDEB("tesla_query: $type: $uri");
 			// Reformat output from 'curl' command. Add params to HTTP header for POST requests (send to function as array)
-			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, $params, true));
+			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, $query_string, true));
 			$data = json_decode($rawdata);
 			
 			if (!empty($data->error)) {
@@ -419,6 +422,7 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_retr
 	LOGDEB("tesla_ble_query: -------------------------------------------------------------------------------------");
 	
 	$jsondata = "";
+	$logdata = "";
 	// separate debug output from other (json) output; debug info is removed from output 
 	foreach($output as $key => $line) {
 		if (strpos($line, "20") === 0 && strpos($line, "[") > 20 && strpos($line, "]") > 25 && strpos($line, "]") < 35) {
@@ -1313,7 +1317,7 @@ function read_api_data()
 			$apidata->connect_timeout = (int)$apidata->connect_timeout;
 		else
 			$apidata->connect_timeout = 20;
-		if (is_numeric($apidata->lock_timeout))
+		if (isset($apidata->lock_timeout) && is_numeric($apidata->lock_timeout))
 			$apidata->lock_timeout = (int)$apidata->lock_timeout;
 		else
 			$apidata->lock_timeout = 5;

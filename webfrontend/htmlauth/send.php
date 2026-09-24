@@ -6,7 +6,9 @@ include_once "loxberry_io.php";
 require_once "loxberry_log.php";
 require_once "loxberry_web.php";
 
-$log = LBLog::newLog( [ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1] );
+// Create log object and activate stderr only if the script is running on the Linux command line (CLI)
+$is_cli = (php_sapi_name() === 'cli') ? 1 : 0;
+$log = LBLog::newLog([ "name" => "TeslaCmd", "stderr" => $is_cli, "addtime" => 1] );
 LOGSTART("Start Logging - send.php");
 
 LOGOK("send.php: -------------------- start of send.php -------------------- ");
@@ -25,13 +27,15 @@ LOGINF("send.php: ".(!empty($token) ? "token is available" : "token is not avail
 // Query parameter 
 //
 
-// Convert commandline parameters to query parameter
-foreach ($argv as $arg) {
-    $e=explode("=",$arg);
-    if(count($e)==2)
-        $_REQUEST[$e[0]]=$e[1];
-    else    
-        $_REQUEST[$e[0]]=0;
+// Convert commandline parameters to query parameter (Only if running via CLI)
+if (isset($argv) && is_array($argv)) {
+    foreach ($argv as $arg) {
+        $e=explode("=",$arg);
+        if(count($e)==2)
+            $_REQUEST[$e[0]]=$e[1];
+        else    
+            $_REQUEST[$e[0]]=0;
+    }
 }
 
 // Define action
@@ -121,7 +125,7 @@ if(isset($command)) {
 		$blecmd = $command->BLECMD;
 		if(isset($command->PARAM)) {																			
 			foreach ($command->PARAM as $param => $param_desc) {
-				$value = $_REQUEST["$param"];
+				$value = isset($_REQUEST["$param"]) ? $_REQUEST["$param"] : null;
 				$optional = strpos($blecmd, "[".$param."]");
 				if (!empty($value) || $optional) {
 					if (!empty($value)) {
@@ -135,8 +139,8 @@ if(isset($command)) {
 						$command_post += array("$param" => $value); 
 					$command_post_print = $command_post_print.", $param: ".$value;
 					if ($command_get_params != "")
-						$command_get_params += "&";
-					$command_get_params += "$param=$value";
+						$command_get_params .= "&";
+					$command_get_params .= "$param=$value";
 					if ($optional) 
 						$blecmd = str_replace("[".$param."]", $value, $blecmd);
 					else
@@ -165,7 +169,8 @@ if(isset($command)) {
 			}
 		}
 	
-		if ((($api == BLE_PLUS_OWNERS_API) || ($api == BLE_ONLY)) && !empty($blecmd) && ($command->AUTH == true) && keyCheck($vin, $apidata->baseblecmd, PRIVATE_KEY) != 0) {
+		$output = array();
+		if ((($api == BLE_PLUS_OWNERS_API) || ($api == BLE_ONLY)) && !empty($blecmd) && ($command->AUTH == true) && keyCheck($vin, PRIVATE_KEY) != 0) {
 			// error if vehicle command API is selected, command requires authentication, but private key is missing
 			$command_output =  $command_output."Vehicle command API is selected and command requires authentication, but private key is missing.\n";
 			LOGDEB("send.php: BLE command requires authentication, but private key is missing.");

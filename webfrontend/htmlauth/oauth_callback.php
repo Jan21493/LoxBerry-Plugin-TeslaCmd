@@ -8,7 +8,9 @@ include_once "loxberry_system.php";
 include_once "loxberry_io.php";
 require_once "loxberry_log.php";
 
-$log = LBLog::newLog([ "name" => "TeslaCmd", "stderr" => 1, "addtime" => 1 ]);
+// Create log object and activate stderr only if the script is running on the Linux command line (CLI)
+$is_cli = (php_sapi_name() === 'cli') ? 1 : 0;
+$log = LBLog::newLog([ "name" => "TeslaCmd", "stderr" => $is_cli, "addtime" => 1] );
 LOGSTART("Start Logging - oauth_callback.php");
 LOGINF("oauth_callback.php: -------------------- start of oauth_callback.php -------------------- ");
 

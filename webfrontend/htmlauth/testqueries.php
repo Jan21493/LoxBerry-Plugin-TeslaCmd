@@ -19,7 +19,7 @@ require_once "tesla_inc.php";
 $navbar[3]['active'] = True;
 
 // Print LoxBerry header
-$L = LBSystem::readlanguage("language.ini");
+$L = LBSystem::readlanguage();
 LBWeb::lbheader($template_title, $helplink, $helptemplate);
 
 // $type contains either "General" or the selected vehicle ID

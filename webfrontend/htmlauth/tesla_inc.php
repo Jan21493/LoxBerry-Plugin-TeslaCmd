@@ -245,11 +245,12 @@ function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 	while($timeout > -1) {
 		if($type == "GET") {
 			//GET
-			LOGDEB("tesla_query: $type: $uri");
+			LOGDEB("tesla_query: REQUEST $type: $uri, query_string: $query_string");
 			//$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri, false ));
 
 			// Reformat output from 'curl' command. Add params to URI for GET requests
 			$rawdata = preg_replace('/("\w+"):(\d+(\.\d+)?)/', '\\1:"\\2"', tesla_curl_send( BASEURL.$uri."?".$query_string, false ));
+			LOGDEB("tesla_query: RESPONSE $type: rawdata: $rawdata");
 			$data = json_decode($rawdata);
 			
 			if (!empty($data->error)) {
@@ -277,13 +278,11 @@ function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 					LOGDEB("tesla_query: $type: timeout $timeout");
 				}
 			} else {
-				// no error, process response
+				// no error, process response. response may be an array or an object
 				if (isset($data->response)) {
 					$returndata = $data->response;
-					// Timestamps are only added here since $data->response is guaranteed to be an object at this point
-					$returndata->{"sentAtTimeLox"} = epoch2lox();
-					$returndata->{"sentAtTimeISO"} = currtime();
-					# Prefer matching Tag if available, then VIN over Vehicle ID (VID) if available
+
+					// Prefer matching Tag if available, then VIN over Vehicle ID (VID) if available
 					if (isset($returndata->vin) && ($returndata->vin == $vehicle_tag)){
 						LOGDEB('VIN ('.$returndata->vin.') exists, publishing to MQTT with topic /'.$returndata->vin.'/'.strtolower($action));
 						mqttpublish($returndata, "/$returndata->vin/".strtolower($action));
@@ -310,6 +309,10 @@ function tesla_query( $vehicle_tag, $action, $params=false, $force=false )
 					//[x] fixed status output
 					mqttpublish($rawdata, "/".strtolower($action));
 				}
+				// Adding timestamps to MQTT
+				mqttpublish(epoch2lox(time()), "/".strtolower($action)."/sentAtTimeLox");
+				mqttpublish(currtime(), "/".strtolower($action)."/sentAtTimeISO");
+			
 				LOGOK("Query: $action: success");
 				break;
 			}

@@ -1338,7 +1338,7 @@ function read_api_data()
 		if (!isset($apidata->bt_adapter) || !is_string($apidata->bt_adapter))
 			$apidata->bt_adapter = "default";
 		$apidata->bt_adapter = trim($apidata->bt_adapter);
-		if ($apidata->bt_adapter !== "default" && !preg_match('/^hci[0-9]+$/', $apidata->bt_adapter))
+		if (!in_array($apidata->bt_adapter, ["default", "usb", "serial"], true))
 			$apidata->bt_adapter = "default";
 
 		LOGDEB("read_api_data: command timeout: ".$apidata->command_timeout);
@@ -1354,8 +1354,9 @@ function read_api_data()
 
 	// create generic tesla-control command with options
 	$apidata->baseblecmd = "timeout ".$linux_process_timeout."s ".TESLA_CONTROL_CMD." ".COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
-	if ($apidata->bt_adapter !== "default") {
-		$apidata->baseblecmd .= "-bt-adapter ".escapeshellarg($apidata->bt_adapter)." ";
+	$btAdapter = get_bluetooth_adapter($apidata->bt_adapter);
+	if ($btAdapter !== "") {
+		$apidata->baseblecmd .= "-bt-adapter ".escapeshellarg($btAdapter)." ";
 	}
 	if ($apidata->tesla_debug) {
 		$apidata->baseblecmd .= DEBUG_OPTION." ";
@@ -1444,180 +1445,42 @@ function get_soc_bluetooth_hint($sbcModel, $compatibleRaw)
 	return "";
 }
 
-function get_bluetooth_adapters()
+function get_bluetooth_adapter($adapterType)
 {
-	$adapters = [];
-
-	$defaultAdapter = new stdClass();
-	$defaultAdapter->id = "default";
-	$defaultAdapter->label = "Default (hci0)";
-	$adapters[] = $defaultAdapter;
-
-	$lsusbMap = [];
-	@exec("lsusb 2>/dev/null", $lsusbOutput, $lsusbRc);
-	if ((int)$lsusbRc === 0 && is_array($lsusbOutput)) {
-		foreach ($lsusbOutput as $line) {
-			if (preg_match('/ID\s+([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\s*(.*)$/', $line, $match)) {
-				$lsusbMap[strtolower($match[1])] = trim($match[2]);
-			}
-		}
-	}
-
-	$knownUsbAdapters = [
-		"0bda:a725" => "Realtek Bluetooth USB-Adapter (RTL8761B)",
-		"0bda:a728" => "Realtek Bluetooth 5.4 USB-Adapter (RTL8761BU or newer)",
-		"0a12:0001" => "CSR8510 A10 Bluetooth USB-Adapter",
-		"0a5c:21e8" => "Broadcom BCM20702A0 Bluetooth USB-Adapter",
-		"8087:0026" => "Intel Wireless Bluetooth adapter",
-		"8087:0032" => "Intel Wireless Bluetooth adapter",
-		"8087:0033" => "Intel Wireless Bluetooth adapter"
-	];
-
-	$hciconfigDetails = get_hciconfig_adapter_details();
-	$sbcModel = "";
-	if (file_exists("/sys/firmware/devicetree/base/model")) {
-		$sbcModel = str_replace("\0", "", (string)@file_get_contents("/sys/firmware/devicetree/base/model"));
-		$sbcModel = trim($sbcModel);
-	}
-	$compatibleRaw = "";
-	if (file_exists("/sys/firmware/devicetree/base/compatible")) {
-		$compatibleRaw = str_replace("\0", ",", (string)@file_get_contents("/sys/firmware/devicetree/base/compatible"));
-		$compatibleRaw = trim($compatibleRaw, ", \t\n\r\0\x0B");
+	if (!in_array($adapterType, ["usb", "serial"], true)) {
+		return "";
 	}
 
 	$adapterPaths = glob('/sys/class/bluetooth/hci*');
 	if (!is_array($adapterPaths)) {
-		return $adapters;
+		return "";
 	}
-	sort($adapterPaths);
-
+	natsort($adapterPaths);
 	foreach ($adapterPaths as $adapterPath) {
 		$adapterId = basename($adapterPath);
-		if (!preg_match('/^hci[0-9]+$/', $adapterId)) {
-			continue;
+		$adapterTarget = @readlink($adapterPath);
+		if (preg_match('/^hci[0-9]+$/', $adapterId)
+			&& $adapterTarget !== false
+			&& strpos($adapterTarget, $adapterType) !== false) {
+			return $adapterId;
 		}
+	}
 
-		$busType = "Unknown bus";
-		$subsystemPath = @readlink($adapterPath.'/device/subsystem');
-		if ($subsystemPath !== false) {
-			if (strpos($subsystemPath, 'usb') !== false) {
-				$busType = "USB dongle";
-			} elseif (strpos($subsystemPath, 'platform') !== false || strpos($subsystemPath, 'amba') !== false) {
-				$busType = "Onboard adapter";
-			} elseif (strpos($subsystemPath, 'pci') !== false) {
-				$busType = "PCI adapter";
-			}
-		}
-		if (isset($hciconfigDetails[$adapterId]["bus"]) && !empty($hciconfigDetails[$adapterId]["bus"])) {
-			$busType = normalize_bluetooth_bus_type($hciconfigDetails[$adapterId]["bus"]);
-		}
+	return "";
+}
 
-		$vendorId = "";
-		$productId = "";
-		$manufacturer = "";
-		$productName = "";
-		$chipHint = "";
-		$hciManufacturer = "";
-		$hciVersion = "";
-		$knownAdapterName = "";
-
-		if (isset($hciconfigDetails[$adapterId]["manufacturer"])) {
-			$hciManufacturer = trim((string)$hciconfigDetails[$adapterId]["manufacturer"]);
-		}
-		if (isset($hciconfigDetails[$adapterId]["hci_version"])) {
-			$hciVersion = trim((string)$hciconfigDetails[$adapterId]["hci_version"]);
-		}
-
-		$sysDevicePath = realpath($adapterPath.'/device');
-		$usbDevicePath = $sysDevicePath;
-		while (!empty($usbDevicePath) && $usbDevicePath !== '/' && !file_exists($usbDevicePath.'/idVendor')) {
-			$parent = dirname($usbDevicePath);
-			if ($parent === $usbDevicePath) {
-				break;
-			}
-			$usbDevicePath = $parent;
-		}
-		if (!empty($usbDevicePath) && file_exists($usbDevicePath.'/idVendor') && file_exists($usbDevicePath.'/idProduct')) {
-			$vendorId = strtolower(trim((string)@file_get_contents($usbDevicePath.'/idVendor')));
-			$productId = strtolower(trim((string)@file_get_contents($usbDevicePath.'/idProduct')));
-			$manufacturer = trim((string)@file_get_contents($usbDevicePath.'/manufacturer'));
-			$productName = trim((string)@file_get_contents($usbDevicePath.'/product'));
-		}
-
-		if (!empty($vendorId) && !empty($productId)) {
-			$chipKey = $vendorId.":".$productId;
-			if (isset($lsusbMap[$chipKey]) && !empty($lsusbMap[$chipKey])) {
-				$chipHint = $lsusbMap[$chipKey];
-			}
-			if (isset($knownUsbAdapters[$chipKey])) {
-				$knownAdapterName = $knownUsbAdapters[$chipKey];
-			}
-		}
-
-		$labelDetails = [];
-		if (!empty($knownAdapterName)) {
-			$labelDetails[] = $knownAdapterName;
-		}
-		$onboardHint = "";
-		if (($busType === "UART adapter" || $busType === "Onboard adapter" || $busType === "SDIO adapter")
-			&& empty($knownAdapterName)) {
-			$onboardHint = get_soc_bluetooth_hint($sbcModel, $compatibleRaw);
-		}
-		if (!empty($onboardHint)) {
-			$labelDetails[] = $onboardHint;
-		}
-		if (!empty($manufacturer)) {
-			$labelDetails[] = $manufacturer;
-		}
-		if (!empty($productName)) {
-			$labelDetails[] = $productName;
-		}
-		if (empty($manufacturer) && !empty($hciManufacturer)) {
-			$labelDetails[] = $hciManufacturer;
-		}
-		if (empty($labelDetails) && !empty($chipHint)) {
-			$labelDetails[] = $chipHint;
-		}
-		if (empty($labelDetails)) {
-			$labelDetails[] = $busType;
-		}
-		if (!empty($vendorId) && !empty($productId)) {
-			$labelDetails[] = strtoupper($vendorId).":".strtoupper($productId);
-		}
-		if (!empty($chipHint)) {
-			$chipHintIncluded = false;
-			foreach ($labelDetails as $detail) {
-				if ($detail === $chipHint) {
-					$chipHintIncluded = true;
-					break;
-				}
-			}
-			if (!$chipHintIncluded) {
-				$labelDetails[] = $chipHint;
-			}
-		}
-		if (!empty($hciVersion)) {
-			$labelDetails[] = "HCI ".$hciVersion;
-		}
-
-		$dedupedLabelDetails = [];
-		$seenDetails = [];
-		foreach ($labelDetails as $detail) {
-			$detail = trim((string)$detail);
-			if ($detail === "") {
-				continue;
-			}
-			$key = strtolower($detail);
-			if (isset($seenDetails[$key])) {
-				continue;
-			}
-			$seenDetails[$key] = true;
-			$dedupedLabelDetails[] = $detail;
-		}
-
+function get_bluetooth_adapters()
+{
+	$adapters = [];
+	foreach ([
+		"default" => "Default - no explicit Bluetooth adapter selection",
+		"usb" => "USB - first Bluetooth dongle",
+		"serial" => "Onboard Bluetooth adapter"
+	] as $id => $label) {
 		$adapter = new stdClass();
-		$adapter->id = $adapterId;
-		$adapter->label = $adapterId." - ".implode(" / ", $dedupedLabelDetails);
+		$adapter->id = $id;
+		$detectedAdapter = get_bluetooth_adapter($id);
+		$adapter->label = $label.($id === "default" ? "" : ", currently ".($detectedAdapter !== "" ? $detectedAdapter : "not detected"));
 		$adapters[] = $adapter;
 	}
 
@@ -1757,8 +1620,9 @@ function tesla_ble_scan()
 {
 	$apidata = read_api_data();
 	$scanCmd = TESLA_BLESCAN.COMMAND_TIMEOUT.$apidata->command_timeout."s ".CONNECT_TIMEOUT.$apidata->connect_timeout."s -bt-impl ".$apidata->bt_impl." ";
-	if ($apidata->bt_adapter !== "default") {
-		$scanCmd .= "-bt-adapter ".escapeshellarg($apidata->bt_adapter)." ";
+	$btAdapter = get_bluetooth_adapter($apidata->bt_adapter);
+	if ($btAdapter !== "") {
+		$scanCmd .= "-bt-adapter ".escapeshellarg($btAdapter)." ";
 	}
 	if ($apidata->tesla_debug) {
 		$scanCmd .= DEBUG_OPTION." ";
@@ -1796,6 +1660,10 @@ function write_api_data($apidata)
 	
 	// will be calculated
 	unset($apidata->lock_timeout);
+	if (!isset($apidata->bt_adapter) || !is_string($apidata->bt_adapter)
+		|| !in_array($apidata->bt_adapter, ["default", "usb", "serial"], true)) {
+		$apidata->bt_adapter = "default";
+	}
 
 	$apidata = json_encode($apidata);	
 	LOGDEB("write_api_data: write API data to file: ".APIFILE);

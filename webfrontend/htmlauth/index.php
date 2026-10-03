@@ -629,19 +629,6 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         $btImpl = isset($apidata->bt_impl) ? $apidata->bt_impl : "goble";
         $btAdapter = isset($apidata->bt_adapter) ? $apidata->bt_adapter : "default";
         $bluetoothAdapters = get_bluetooth_adapters();
-        $btAdapterKnown = false;
-        foreach ($bluetoothAdapters as $adapterEntry) {
-            if ($adapterEntry->id === $btAdapter) {
-                $btAdapterKnown = true;
-                break;
-            }
-        }
-        if (!$btAdapterKnown && preg_match('/^hci[0-9]+$/', $btAdapter)) {
-            $customAdapter = new stdClass();
-            $customAdapter->id = $btAdapter;
-            $customAdapter->label = $btAdapter." - currently not connected";
-            $bluetoothAdapters[] = $customAdapter;
-        }
     ?>
     <table>
         <colgroup>
@@ -710,7 +697,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         <tr>
             <td>
                 <label for="bt_adapter"><strong>Bluetooth adapter</strong><br>
-                <span class="hint">Select the Bluetooth adapter for tesla-control and tesla-blescan. "Default" maps to hci0.</span></label>
+                <span class="hint">Select the Bluetooth adapter type for tesla-control and tesla-blescan. USB and onboard selections resolve the current adapter number automatically.</span></label>
             </td>
             <td colspan="4">
                 <select name="bt_adapter" id="bt_adapter" data-mini="true">

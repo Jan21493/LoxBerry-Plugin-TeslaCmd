@@ -628,7 +628,8 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         $bleRetries = isset($apidata->ble_retries) ? (int)$apidata->ble_retries : 1;
         $btImpl = isset($apidata->bt_impl) ? $apidata->bt_impl : "goble";
         $btAdapter = isset($apidata->bt_adapter) ? $apidata->bt_adapter : "default";
-        $bluetoothAdapters = get_bluetooth_adapters();
+        $detectedBluetoothAdapters = get_detected_bluetooth_adapters();
+        $bluetoothAdapters = get_bluetooth_adapters($detectedBluetoothAdapters);
     ?>
     <table>
         <colgroup>
@@ -709,6 +710,26 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         }
 ?>
                 </select>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <strong>Detected Bluetooth adapters</strong>
+            </td>
+            <td colspan="4">
+<?php
+        if (count($detectedBluetoothAdapters) === 0) {
+?>
+                No Bluetooth adapters detected.
+<?php
+        } else {
+            foreach ($detectedBluetoothAdapters as $adapterEntry) {
+?>
+                <div><?php echo htmlspecialchars($adapterEntry->label); ?></div>
+<?php
+            }
+        }
+?>
             </td>
         </tr>
     </table>   

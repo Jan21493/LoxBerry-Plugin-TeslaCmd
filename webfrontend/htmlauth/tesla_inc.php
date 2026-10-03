@@ -1469,18 +1469,195 @@ function get_bluetooth_adapter($adapterType)
 	return "";
 }
 
-function get_bluetooth_adapters()
+function get_bluetooth_adapters($detectedAdapters = null)
 {
+	if ($detectedAdapters === null) {
+		$detectedAdapters = get_detected_bluetooth_adapters();
+	}
 	$adapters = [];
 	foreach ([
-		"default" => "Default - no explicit Bluetooth adapter selection",
-		"usb" => "USB - first Bluetooth dongle",
-		"serial" => "Onboard Bluetooth adapter"
+		"default" => "Default - no explicit hci port",
+		"usb" => "USB - currently mapped to ",
+		"serial" => "Onboard - "
 	] as $id => $label) {
 		$adapter = new stdClass();
 		$adapter->id = $id;
 		$detectedAdapter = get_bluetooth_adapter($id);
-		$adapter->label = $label.($id === "default" ? "" : ", currently ".($detectedAdapter !== "" ? $detectedAdapter : "not detected"));
+		$adapter->label = $label;
+		if ($id !== "default") {
+			if ($detectedAdapter === "") {
+				$adapter->label .= "not detected";
+			} else {
+				$adapter->label .= $detectedAdapter;
+				foreach ($detectedAdapters as $detected) {
+					if ($detected->id === $detectedAdapter) {
+						$adapter->label = $label.$detected->label;
+						break;
+					}
+				}
+			}
+		}
+		$adapters[] = $adapter;
+	}
+
+	return $adapters;
+}
+
+function get_detected_bluetooth_adapters()
+{
+	$adapters = [];
+
+	$lsusbMap = [];
+	@exec("lsusb 2>/dev/null", $lsusbOutput, $lsusbRc);
+	if ((int)$lsusbRc === 0 && is_array($lsusbOutput)) {
+		foreach ($lsusbOutput as $line) {
+			if (preg_match('/ID\s+([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\s*(.*)$/', $line, $match)) {
+				$lsusbMap[strtolower($match[1])] = trim($match[2]);
+			}
+		}
+	}
+
+	$knownUsbAdapters = [
+		"0bda:a725" => "Realtek Bluetooth USB-Adapter (RTL8761B)",
+		"0bda:a728" => "Realtek Bluetooth 5.4 USB-Adapter (RTL8761BU or newer)",
+		"0a12:0001" => "CSR8510 A10 Bluetooth USB-Adapter",
+		"0a5c:21e8" => "Broadcom BCM20702A0 Bluetooth USB-Adapter",
+		"8087:0026" => "Intel Wireless Bluetooth adapter",
+		"8087:0032" => "Intel Wireless Bluetooth adapter",
+		"8087:0033" => "Intel Wireless Bluetooth adapter"
+	];
+
+	$hciconfigDetails = get_hciconfig_adapter_details();
+	$sbcModel = "";
+	if (file_exists("/sys/firmware/devicetree/base/model")) {
+		$sbcModel = str_replace("\0", "", (string)@file_get_contents("/sys/firmware/devicetree/base/model"));
+		$sbcModel = trim($sbcModel);
+	}
+	$compatibleRaw = "";
+	if (file_exists("/sys/firmware/devicetree/base/compatible")) {
+		$compatibleRaw = str_replace("\0", ",", (string)@file_get_contents("/sys/firmware/devicetree/base/compatible"));
+		$compatibleRaw = trim($compatibleRaw, ", \t\n\r\0\x0B");
+	}
+
+	$adapterPaths = glob('/sys/class/bluetooth/hci*');
+	if (!is_array($adapterPaths)) {
+		return $adapters;
+	}
+	natsort($adapterPaths);
+
+	foreach ($adapterPaths as $adapterPath) {
+		$adapterId = basename($adapterPath);
+		if (!preg_match('/^hci[0-9]+$/', $adapterId)) {
+			continue;
+		}
+
+		$busType = "Unknown bus";
+		$subsystemPath = @readlink($adapterPath.'/device/subsystem');
+		if ($subsystemPath !== false) {
+			if (strpos($subsystemPath, 'usb') !== false) {
+				$busType = "USB dongle";
+			} elseif (strpos($subsystemPath, 'platform') !== false || strpos($subsystemPath, 'amba') !== false) {
+				$busType = "Onboard adapter";
+			} elseif (strpos($subsystemPath, 'pci') !== false) {
+				$busType = "PCI adapter";
+			}
+		}
+		if (isset($hciconfigDetails[$adapterId]["bus"]) && !empty($hciconfigDetails[$adapterId]["bus"])) {
+			$busType = normalize_bluetooth_bus_type($hciconfigDetails[$adapterId]["bus"]);
+		}
+
+		$vendorId = "";
+		$productId = "";
+		$manufacturer = "";
+		$productName = "";
+		$chipHint = "";
+		$hciManufacturer = "";
+		$hciVersion = "";
+		$knownAdapterName = "";
+
+		if (isset($hciconfigDetails[$adapterId]["manufacturer"])) {
+			$hciManufacturer = trim((string)$hciconfigDetails[$adapterId]["manufacturer"]);
+		}
+		if (isset($hciconfigDetails[$adapterId]["hci_version"])) {
+			$hciVersion = trim((string)$hciconfigDetails[$adapterId]["hci_version"]);
+		}
+
+		$sysDevicePath = realpath($adapterPath.'/device');
+		$usbDevicePath = $sysDevicePath;
+		while (!empty($usbDevicePath) && $usbDevicePath !== '/' && !file_exists($usbDevicePath.'/idVendor')) {
+			$parent = dirname($usbDevicePath);
+			if ($parent === $usbDevicePath) {
+				break;
+			}
+			$usbDevicePath = $parent;
+		}
+		if (!empty($usbDevicePath) && file_exists($usbDevicePath.'/idVendor') && file_exists($usbDevicePath.'/idProduct')) {
+			$vendorId = strtolower(trim((string)@file_get_contents($usbDevicePath.'/idVendor')));
+			$productId = strtolower(trim((string)@file_get_contents($usbDevicePath.'/idProduct')));
+			$manufacturer = trim((string)@file_get_contents($usbDevicePath.'/manufacturer'));
+			$productName = trim((string)@file_get_contents($usbDevicePath.'/product'));
+		}
+
+		if (!empty($vendorId) && !empty($productId)) {
+			$chipKey = $vendorId.":".$productId;
+			if (isset($lsusbMap[$chipKey]) && !empty($lsusbMap[$chipKey])) {
+				$chipHint = $lsusbMap[$chipKey];
+			}
+			if (isset($knownUsbAdapters[$chipKey])) {
+				$knownAdapterName = $knownUsbAdapters[$chipKey];
+			}
+		}
+
+		$labelDetails = [];
+		if (!empty($knownAdapterName)) {
+			$labelDetails[] = $knownAdapterName;
+		}
+		if (($busType === "UART adapter" || $busType === "Onboard adapter" || $busType === "SDIO adapter")
+			&& empty($knownAdapterName)) {
+			$onboardHint = get_soc_bluetooth_hint($sbcModel, $compatibleRaw);
+			if (!empty($onboardHint)) {
+				$labelDetails[] = $onboardHint;
+			}
+		}
+		if (!empty($manufacturer)) {
+			$labelDetails[] = $manufacturer;
+		}
+		if (!empty($productName)) {
+			$labelDetails[] = $productName;
+		}
+		if (empty($manufacturer) && !empty($hciManufacturer)) {
+			$labelDetails[] = $hciManufacturer;
+		}
+		if (empty($labelDetails) && !empty($chipHint)) {
+			$labelDetails[] = $chipHint;
+		}
+		if (empty($labelDetails)) {
+			$labelDetails[] = $busType;
+		}
+		if (!empty($vendorId) && !empty($productId)) {
+			$labelDetails[] = strtoupper($vendorId).":".strtoupper($productId);
+		}
+		if (!empty($chipHint) && !in_array($chipHint, $labelDetails, true)) {
+			$labelDetails[] = $chipHint;
+		}
+		if (!empty($hciVersion)) {
+			$labelDetails[] = "HCI ".$hciVersion;
+		}
+
+		$dedupedLabelDetails = [];
+		$seenDetails = [];
+		foreach ($labelDetails as $detail) {
+			$detail = trim((string)$detail);
+			if ($detail === "" || isset($seenDetails[strtolower($detail)])) {
+				continue;
+			}
+			$seenDetails[strtolower($detail)] = true;
+			$dedupedLabelDetails[] = $detail;
+		}
+
+		$adapter = new stdClass();
+		$adapter->id = $adapterId;
+		$adapter->label = $adapterId." - ".implode(" / ", $dedupedLabelDetails);
 		$adapters[] = $adapter;
 	}
 

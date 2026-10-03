@@ -697,7 +697,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         <tr>
             <td>
                 <label for="bt_adapter"><strong>Bluetooth adapter</strong><br>
-                <span class="hint">Select the Bluetooth adapter type for tesla-control and tesla-blescan. USB and onboard selections resolve the current adapter number automatically.</span></label>
+                <span class="hint">Select the Bluetooth adapter type for tesla-control and tesla-blescan. USB maps to the first adapter number (hciX) of that type.</span></label>
             </td>
             <td colspan="4">
                 <select name="bt_adapter" id="bt_adapter" data-mini="true">

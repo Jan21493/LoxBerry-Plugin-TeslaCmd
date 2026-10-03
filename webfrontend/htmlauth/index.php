@@ -628,20 +628,8 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         $bleRetries = isset($apidata->ble_retries) ? (int)$apidata->ble_retries : 1;
         $btImpl = isset($apidata->bt_impl) ? $apidata->bt_impl : "goble";
         $btAdapter = isset($apidata->bt_adapter) ? $apidata->bt_adapter : "default";
-        $bluetoothAdapters = get_bluetooth_adapters();
-        $btAdapterKnown = false;
-        foreach ($bluetoothAdapters as $adapterEntry) {
-            if ($adapterEntry->id === $btAdapter) {
-                $btAdapterKnown = true;
-                break;
-            }
-        }
-        if (!$btAdapterKnown && preg_match('/^hci[0-9]+$/', $btAdapter)) {
-            $customAdapter = new stdClass();
-            $customAdapter->id = $btAdapter;
-            $customAdapter->label = $btAdapter." - currently not connected";
-            $bluetoothAdapters[] = $customAdapter;
-        }
+        $detectedBluetoothAdapters = get_detected_bluetooth_adapters();
+        $bluetoothAdapters = get_bluetooth_adapters($detectedBluetoothAdapters);
     ?>
     <table>
         <colgroup>
@@ -710,7 +698,7 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         <tr>
             <td>
                 <label for="bt_adapter"><strong>Bluetooth adapter</strong><br>
-                <span class="hint">Select the Bluetooth adapter for tesla-control and tesla-blescan. "Default" maps to hci0.</span></label>
+                <span class="hint">Select the Bluetooth adapter type for tesla-control and tesla-blescan. USB maps to the first adapter number (hciX) of that type.</span></label>
             </td>
             <td colspan="4">
                 <select name="bt_adapter" id="bt_adapter" data-mini="true">
@@ -722,6 +710,26 @@ a command-line interface for sending commands to Tesla vehicles either via Bluet
         }
 ?>
                 </select>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <strong>Detected Bluetooth adapters</strong>
+            </td>
+            <td colspan="4">
+<?php
+        if (count($detectedBluetoothAdapters) === 0) {
+?>
+                No Bluetooth adapters detected.
+<?php
+        } else {
+            foreach ($detectedBluetoothAdapters as $adapterEntry) {
+?>
+                <div><?php echo htmlspecialchars($adapterEntry->label); ?></div>
+<?php
+            }
+        }
+?>
             </td>
         </tr>
     </table>   

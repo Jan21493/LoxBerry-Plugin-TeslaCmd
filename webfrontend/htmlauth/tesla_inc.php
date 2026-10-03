@@ -1611,39 +1611,39 @@ function get_detected_bluetooth_adapters()
 		$labelDetails = [];
 		if (!empty($knownAdapterName)) {
 			$labelDetails[] = $knownAdapterName;
-		}
-		if (($busType === "UART adapter" || $busType === "Onboard adapter" || $busType === "SDIO adapter")
-			&& empty($knownAdapterName)) {
-			$onboardHint = get_soc_bluetooth_hint($sbcModel, $compatibleRaw);
-			if (!empty($onboardHint)) {
-				$labelDetails[] = $onboardHint;
+		} else {
+			if (($busType === "UART adapter" || $busType === "Onboard adapter" || $busType === "SDIO adapter")
+				&& empty($knownAdapterName)) {
+				$onboardHint = get_soc_bluetooth_hint($sbcModel, $compatibleRaw);
+				if (!empty($onboardHint)) {
+					$labelDetails[] = $onboardHint;
+				}
+			}
+			if (!empty($manufacturer)) {
+				$labelDetails[] = $manufacturer;
+			}
+			if (!empty($productName)) {
+				$labelDetails[] = $productName;
+			}
+			if (empty($manufacturer) && !empty($hciManufacturer)) {
+				$labelDetails[] = $hciManufacturer;
+			}
+			if (empty($labelDetails) && !empty($chipHint)) {
+				$labelDetails[] = $chipHint;
+			}
+			if (empty($labelDetails)) {
+				$labelDetails[] = $busType;
+			}
+			if (!empty($vendorId) && !empty($productId)) {
+				$labelDetails[] = strtoupper($vendorId).":".strtoupper($productId);
+			}
+			if (!empty($chipHint) && !in_array($chipHint, $labelDetails, true)) {
+				$labelDetails[] = $chipHint;
+			}
+			if (!empty($hciVersion)) {
+				$labelDetails[] = "HCI ".$hciVersion;
 			}
 		}
-		if (!empty($manufacturer)) {
-			$labelDetails[] = $manufacturer;
-		}
-		if (!empty($productName)) {
-			$labelDetails[] = $productName;
-		}
-		if (empty($manufacturer) && !empty($hciManufacturer)) {
-			$labelDetails[] = $hciManufacturer;
-		}
-		if (empty($labelDetails) && !empty($chipHint)) {
-			$labelDetails[] = $chipHint;
-		}
-		if (empty($labelDetails)) {
-			$labelDetails[] = $busType;
-		}
-		if (!empty($vendorId) && !empty($productId)) {
-			$labelDetails[] = strtoupper($vendorId).":".strtoupper($productId);
-		}
-		if (!empty($chipHint) && !in_array($chipHint, $labelDetails, true)) {
-			$labelDetails[] = $chipHint;
-		}
-		if (!empty($hciVersion)) {
-			$labelDetails[] = "HCI ".$hciVersion;
-		}
-
 		$dedupedLabelDetails = [];
 		$seenDetails = [];
 		foreach ($labelDetails as $detail) {

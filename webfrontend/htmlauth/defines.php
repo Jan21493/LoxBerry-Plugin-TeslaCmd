@@ -46,6 +46,7 @@ define('ADD_KEY_REQUEST', "add-key-request ".PUBLIC_KEY_WITH_PATH." owner cloud_
 // Template
 $template_title = "Tesla Command " . LBSystem::pluginversion();
 $helplink = "https://wiki.loxberry.de/plugins/teslacmd/start";
+$helptemplate = "teslacmd-help.html";
 
 // Command URI
 $lbbaseurl = "http://&lt;user&gt;:&lt;pass&gt;@".LBSystem::get_localip();

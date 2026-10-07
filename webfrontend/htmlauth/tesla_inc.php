@@ -427,20 +427,36 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_retr
 	
 	$jsondata = "";
 	$logdata = "";
+	$error_lines = [];
+	foreach ($output as $line) {
+		if (strpos(ltrim($line), 'Error') === 0) {
+			$error_lines[] = $line;
+		}
+	}
+	$error_msg = "";
+	if ($result_code !== 0) {
+		$error_msg = implode("\n", $error_lines);
+		if ($error_msg === "") {
+			$error_msg = trim(implode("\n", $output));
+		}
+		if ($error_msg === "") {
+			$error_msg = get_result_code_msg($result_code);
+		}
+	}
 	// separate debug output from other (json) output; debug info is removed from output 
 	foreach($output as $key => $line) {
 		if (strpos($line, "20") === 0 && strpos($line, "[") > 20 && strpos($line, "]") > 25 && strpos($line, "]") < 35) {
 			// logging output 
 			if (!empty($logdata))
 				$logdata .= ', '; 
-			$logdata .= '"'.$line.'"';
+			$logdata .= json_encode($line);
 			unset($output[$key]);
 		} else {
 			if ((strpos($line, 'Error') === 0)) {
 				// skip these lines from JSON data
 				if (!empty($logdata))
 					$logdata .= ', ';
-				$logdata .= '"'.$line.'"';
+				$logdata .= json_encode($line);
 				unset($output[$key]);
 				
 			} else if (trim($line) === '') {
@@ -467,7 +483,7 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_retr
 			//echo "<pre>OUTPUT:<br>";var_dump($jsondata);echo "</pre>";
 			$rawdata .= ', '.substr($jsondata, 1);
 		} else {
-			$rawdata .= '"error_msg":"'.end($output).'"';
+			$rawdata .= '"error_msg":'.json_encode($error_msg);
 			if ($action == "BODY_CONTROLLER_STATE") {
 				$rawdata .= ', "vehicleNearby":false';
 			}
@@ -479,15 +495,19 @@ function tesla_ble_query( $vehicle_tag, $action, $baseblecmd, $blecmd, $ble_retr
 		//POST - these commands do not send JSON output, only last line is taken
 		if ( $result_code == 0) {
 			$rawdata .= '"error_msg":"", ';
-			$rawdata .= '"output_msg":"'.end($output).'"';
+			$rawdata .= '"output_msg":'.json_encode(empty($output) ? "" : end($output));
 		} else {
-			$rawdata .= '"error_msg":"'.end($output).'", ';
+			$rawdata .= '"error_msg":'.json_encode($error_msg).', ';
 			$rawdata .= '"output_msg":""';
 		}
 		$rawdata .= ' }';
 		mqttpublish(json_decode($rawdata), "/$vehicle_tag/".strtolower($action));
 	}
-	LOGDEB("tesla_ble_query: finished sucessfully.");
+	if ($result_code === 0) {
+		LOGDEB("tesla_ble_query: finished successfully.");
+	} else {
+		LOGERR("tesla_ble_query: finished with error! result code: $result_code; $error_msg");
+	}
 	if (empty($logdata))
 		return $rawdata;
 	else
@@ -519,6 +539,9 @@ function get_result_code_msg($result_code)
 			break;
 		case 2:
 			$result_code_msg = "Misuse of shell builtins.";
+			break;
+		case 124:
+			$result_code_msg = "Command timed out.";
 			break;
 		case 126:
 			$result_code_msg = "Command invoked cannot execute.";
@@ -740,22 +763,79 @@ function makeDir($path)
      return is_dir($path) || mkdir($path);
 }
 
+function tesla_bluetoothctl($argument, &$output)
+{
+	$output = [];
+	exec("LC_ALL=C timeout 10s sudo -n /usr/bin/bluetoothctl --timeout 8 ".$argument." 2>&1", $output, $result_code);
+	LOGDEB("tesla_ble_recovery: bluetoothctl $argument: exit code $result_code; ".implode("\n", $output));
+	return $result_code;
+}
+
+function tesla_ble_power_cycle($adapter)
+{
+	if (!preg_match('/^hci[0-9]+$/', $adapter)) {
+		LOGERR("tesla_ble_recovery: Invalid adapter ID; skipping power cycle.");
+		return false;
+	}
+	exec("timeout 5s /usr/bin/hciconfig ".escapeshellarg($adapter)." 2>&1", $adapter_info, $result_code);
+	if ($result_code !== 0 || !preg_match('/BD Address:\s*([0-9A-F:]{17})/i', implode("\n", $adapter_info), $address_match)) {
+		LOGERR("tesla_ble_recovery: Cannot read address of $adapter (exit code $result_code): ".implode("\n", $adapter_info));
+		return false;
+	}
+	$address = strtoupper($address_match[1]);
+	$result_code = tesla_bluetoothctl("show", $status);
+	if ($result_code !== 0 || !preg_match('/^Controller '.preg_quote($address, '/').'\s/m', implode("\n", $status))) {
+		// bluetoothctl power operates on its default adapter, which may differ from tesla-control's.
+		LOGERR("tesla_ble_recovery: Default BlueZ controller does not match $adapter ($address), or is unavailable; skipping power cycle.");
+		return false;
+	}
+
+	LOGWARN("tesla_ble_recovery: Power cycling $adapter via BlueZ; no UART service or driver reload.");
+	$power_off_ok = false;
+	$power_on_ok = false;
+	foreach (["off", "on"] as $power) {
+		$result_code = tesla_bluetoothctl("power ".$power, $reset_output);
+		$success = $result_code === 0 && strpos(implode("\n", $reset_output), "Changing power $power succeeded") !== false;
+		if (!$success) {
+			LOGERR("tesla_ble_recovery: Power $power failed for $adapter (exit code $result_code): ".implode("\n", $reset_output));
+		}
+		if ($power === "off") {
+			$power_off_ok = $success;
+			sleep(2);
+		} else {
+			$power_on_ok = $success;
+		}
+	}
+	// Always attempt power on, even if power off failed or timed out.
+	sleep(1);
+	$result_code = tesla_bluetoothctl("show", $status);
+	$status_string = implode("\n", $status);
+	if (!$power_off_ok || !$power_on_ok || $result_code !== 0 ||
+		!preg_match('/^Controller '.preg_quote($address, '/').'\s/m', $status_string) ||
+		!preg_match('/^\s*Powered:\s+yes\s*$/m', $status_string) ||
+		(preg_match('/^\s*PowerState:/m', $status_string) && !preg_match('/^\s*PowerState:\s+on\s*$/m', $status_string))) {
+		LOGERR("tesla_ble_recovery: Power cycle could not be confirmed for $adapter; no automatic driver reset will be attempted.");
+		return false;
+	}
+	LOGINF("tesla_ble_recovery: Power cycle confirmed for $adapter; controller is powered on.");
+	return true;
+}
+
 function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, $exclusive = false)
 {
 	$lockfile = "";
 	$lockHandle = NULL;
 	$lockAcquired = false;
+	$output = [];
 
-	// Function to execute shell command
-	//[ ] If Timeout, restart apache server: sudo systemctl restart apache2
-	
 	LOGINF("tesla_shell_exec: Start executing a shell command ...");
-	$command .= " 2>&1";
-	if( !empty($command) ) {
+	if (trim($command) !== "") {
+		$command .= " 2>&1";
 		LOGDEB("tesla_shell_exec: command: $command");
 	} else {
 		LOGERR("tesla_shell_exec: empty command");
-		return NULL;
+		$output = ["Error: Empty shell command."];
+		return 2;
 	}
 
 	if ($exclusive) {
@@ -781,20 +861,25 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, 
 				LOGINF("tesla_shell_exec: Waiting time for BLE lock: $waitSeconds seconds.");
 				if (!$lockAcquired) {
 					LOGWARN("tesla_shell_exec: BLE interface still busy. Skipping this command.");
+					$output = ["Error: BLE interface still busy; command was not executed."];
 					if ($lockHandle !== false) {
 						fclose($lockHandle);
 					}
 					return 1; 
 				}
 			} else {
-				LOGERR("tesla_shell_exec: can't open lock file: $lockfile. Try command without exclusive access!");
+				LOGERR("tesla_shell_exec: can't open lock file: $lockfile. Skipping command.");
+				$output = ["Error: Cannot open BLE lock file: $lockfile"];
+				return 1;
 			}
 		} else {
-			LOGERR("tesla_shell_exec: ".$tmpdir." does not exist and can't be created. Try command now without exclusive access!");
+			LOGERR("tesla_shell_exec: ".$tmpdir." does not exist and can't be created. Skipping command.");
+			$output = ["Error: Cannot create BLE lock directory: $tmpdir"];
+			return 1;
 		}
 	}
 	$eta=-hrtime(true);
-	$output=NULL;
+	$output=[];
 	$result_code=NULL;
 	exec($command, $output, $result_code);
 	$eta+=hrtime(true);
@@ -803,9 +888,6 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, 
 	//Did an error occur? If so, retry the command
 	if ($result_code > 0) {
 		LOGWARN("tesla_shell_exec: command has returned an error! The result code was: " . $result_code);
-		// On an Orange PI zero 3 with DietPi v9.7.1 (Bookworm, released July 2024) the command returned errors after typically 1-2 hours
-		// so this 'dirty' fix was added that restarts the bluetooth service. There might be an error in the bluetooth driver that I can't fix.
-
 		// Hardware diagnostics for SBC. This is only for informational logging.
 		$sbc_model = "Unknown Hardware";
 		if (file_exists("/sys/firmware/devicetree/base/model")) {
@@ -813,10 +895,17 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, 
 			$sbc_model = str_replace("\0", '', $sbc_model);
 			$sbc_model = trim($sbc_model);
 		}
-		// Hardware diagnostics for SBBluetooth adapter type. 
+		$adapter = "hci0";
+		if (preg_match('/(?:^|\s)-bt-adapter\s+[\'"]?(hci[0-9]+)[\'"]?(?:\s|$)/', $command, $adapter_match)) {
+			$adapter = $adapter_match[1];
+		}
+		// UART adapters can live below /sys/devices/virtual/tty, without a device subsystem link.
 		$bt_type = "Unknown Bus";
-		if (file_exists("/sys/class/bluetooth/hci0/device/subsystem")) {
-			$subsystem_path = @readlink("/sys/class/bluetooth/hci0/device/subsystem");
+		$device_path = realpath("/sys/class/bluetooth/$adapter/device");
+		if ($device_path !== false && strpos($device_path, '/tty/') !== false) {
+			$bt_type = "Onboard UART / Platform-Chip";
+		} elseif (file_exists("/sys/class/bluetooth/$adapter/device/subsystem")) {
+			$subsystem_path = readlink("/sys/class/bluetooth/$adapter/device/subsystem");
 			if ($subsystem_path !== false) {
 				if (strpos($subsystem_path, 'usb') !== false) {
 					$bt_type = "USB Dongle";
@@ -825,18 +914,24 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, 
 				}
 			}
 		}
-		LOGINF("tesla_shell_exec DIAGNOSTICS: Running on '$sbc_model' with hci0 Adapter via '$bt_type'.");
+		$bt_impl = "SDK default";
+		if (preg_match('/(?:^|\s)-bt-impl\s+[\'"]?(tinygo|goble)[\'"]?(?:\s|$)/', $command, $impl_match)) {
+			$bt_impl = $impl_match[1];
+		}
+		LOGINF("tesla_shell_exec DIAGNOSTICS: Running on '$sbc_model' with $adapter Adapter via '$bt_type'; BLE implementation: $bt_impl.");
 		
 		// Report error output for debugging and restart bluetooth service if required
 		if (!empty($output)) {
 			$output_string = implode("\n", $output);
+			LOGWARN("tesla_shell_exec: Failed attempt output: ".$output_string);
 
-			// Universeller D-Bus/BlueZ-Reset for all platforms (USB-Dongle friendly)
 			if ((strpos($output_string, 'Operation already in progress') !== false)||
 				(strpos($output_string, 'bluetooth: adaptor is not powered') !== false)) {
-				LOGWARN("tesla_shell_exec: BlueZ interface blocked. Resetting controller via software ...");
-				exec("sudo /usr/bin/bluetoothctl power off && sudo /usr/bin/bluetoothctl power on", $output2, $result_code2);
-				sleep(1);
+				if ($exclusive && $lockAcquired) {
+					tesla_ble_power_cycle($adapter);
+				} else {
+					LOGERR("tesla_ble_recovery: No exclusive BLE lock held; skipping power cycle.");
+				}
 			}
 		}
 
@@ -846,10 +941,13 @@ function tesla_shell_exec( $command, &$output, $retries = 0, $lock_timeout = 5, 
 		} else {
 			LOGDEB("tesla_shell_exec: Last command will be repeated after waiting for 5 seconds ...");				
 			sleep(5);
+			$output = [];
 			exec($command, $output, $result_code);
 			if (($retries == "2") && ($result_code != 0)) {
+				LOGWARN("tesla_shell_exec: Retry failed (exit code $result_code): ".implode("\n", $output));
 				LOGDEB("tesla_shell_exec: Last command failed again and is repeated again after waiting 5 seconds ...");				
 				sleep(5);
+				$output = [];
 				exec($command, $output, $result_code);
 			}
 		} 
@@ -1445,8 +1543,11 @@ function get_soc_bluetooth_hint($sbcModel, $compatibleRaw)
 	return "";
 }
 
-function get_bluetooth_adapter($adapterType)
+function get_bluetooth_adapter($adapterType, $reportMissing = true)
 {
+	if ($adapterType === "default") {
+		return "hci0";
+	}
 	if (!in_array($adapterType, ["usb", "serial"], true)) {
 		return "";
 	}
@@ -1458,14 +1559,19 @@ function get_bluetooth_adapter($adapterType)
 	natsort($adapterPaths);
 	foreach ($adapterPaths as $adapterPath) {
 		$adapterId = basename($adapterPath);
-		$adapterTarget = @readlink($adapterPath);
+		$adapterTarget = realpath($adapterPath);
 		if (preg_match('/^hci[0-9]+$/', $adapterId)
 			&& $adapterTarget !== false
-			&& strpos($adapterTarget, $adapterType) !== false) {
+			&& (($adapterType === "usb" && strpos($adapterTarget, '/usb') !== false)
+				|| ($adapterType === "serial" && (strpos($adapterTarget, '/tty/') !== false
+					|| strpos($adapterTarget, '/serial') !== false)))) {
 			return $adapterId;
 		}
 	}
 
+	if ($reportMissing) {
+		LOGERR("get_bluetooth_adapter: No $adapterType Bluetooth adapter detected.");
+	}
 	return "";
 }
 
@@ -1476,13 +1582,13 @@ function get_bluetooth_adapters($detectedAdapters = null)
 	}
 	$adapters = [];
 	foreach ([
-		"default" => "Default - no explicit hci port",
+		"default" => "Default - hci0",
 		"usb" => "USB - currently mapped to ",
 		"serial" => "Onboard - "
 	] as $id => $label) {
 		$adapter = new stdClass();
 		$adapter->id = $id;
-		$detectedAdapter = get_bluetooth_adapter($id);
+		$detectedAdapter = get_bluetooth_adapter($id, false);
 		$adapter->label = $label;
 		if ($id !== "default") {
 			if ($detectedAdapter === "") {

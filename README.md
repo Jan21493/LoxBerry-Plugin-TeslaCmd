@@ -33,6 +33,15 @@ Instead of using your Tesla account, you can scan for vehicles nearby, select yo
 ## Install keys
 You need to generate a key pair with a public and a private and install the public key in your vehicle before you are able to communicate with it via BLE. The private key is used by the command line utility 'tesla-control' to sign the command and the public key is used by the car to verify that the command is legitimate. One private key is stored for each car. The keys can be generated via settings page of the plugin.
 
+## BLE diagnostics and recovery
+The default adapter is passed explicitly as `hci0`. USB and onboard selections are resolved to their current HCI device; absent optional adapters are shown as "not detected" without logging an error while listing settings.
+
+BLE commands require the exclusive plugin lock. Lock failures return an error without executing the command, and retries return only the final attempt's output. Diagnostics report the selected adapter, its bus and BLE implementation. Exit code `124` indicates a command timeout.
+
+For "Operation already in progress" or "adaptor is not powered", the plugin attempts a bounded BlueZ power off/on cycle while holding the BLE lock. It verifies that the BlueZ default controller matches the command's adapter, logs failures, always attempts power on after power off, and checks the final powered state. It does not reload drivers, restart UART attachment services, disable WLAN or switch between `tinygo` and `goble` (rigado/ble).
+
+On Orange Pi Zero 3 systems, ensure only one UART attachment service owns `/dev/ttyBT0`. On the tested endor system, `sprd-bluetooth.service` was retained and the competing `aw859a-bluetooth.service` was disabled. This is a host-specific configuration change, not an installation action performed by the plugin. Restarting the UART attachment service on the affected kernel caused a `sprdbt_tty` fault; a power cycle was required to restore operation. Do not use automatic driver reloads as a recovery workaround.
+
 ## Example queries
 ### Returns all products including vehicles, powerwalls, and energy sites
 `http://<user>:<pass>@192.168.1.1/admin/plugins/teslacmd/send.php?action=product_list`
